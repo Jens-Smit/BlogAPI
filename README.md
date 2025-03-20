@@ -50,33 +50,112 @@ Stelle sicher, dass deine Datenbank korrekt konfiguriert ist, und führe dann di
 
 Alternativ kannst du auch den eingebauten PHP-Server nutzen:
 
-     ```bash
+     
      php -S localhost:8000 -t public
    
 ## API Endpoints
 
 ### Authentifizierung
-
+- **POST** `/api/register`  
+  Registriert einen neuen Benutzer. *Hinweis: Dieser Endpunkt erfordert keine E-Mail-Verifizierung.*
+      
+  ```json
+    {
+  "email": "YourEmail",
+  "password": "YourPassword"
+   }
+  
 - **POST** `/api/login`  
   Authentifiziert den Benutzer und liefert ein JWT zur Nutzung bei nachfolgenden Anfragen zurück.
+      
+  ```json
+    {
+  "email": "YourEmail",
+  "password": "YourPassword"
+   }
 
 ### Blog-Beiträge
 
 - **GET** `/api/posts`  
   Listet alle Blog-Beiträge auf.
-
-- **GET** `/api/posts/{id}`  
-  Zeigt den Blog-Beitrag mit der angegebenen ID an.
+    ```json
+       {
+     "email": "YourEmail",
+     "password": "YourPassword"
+      }
 
 - **POST** `/api/posts`  
   Erstellt einen neuen Blog-Beitrag. *(Erfordert Authentifizierung)*
+  **header**
+     ```json
+          {
+        "email": "YourEmail",
+        "password": "YourPassword"
+         }
+
+ **body**
+
+      {
+        "email": "YourEmail",
+        "password": "YourPassword"
+         }
 
 - **DELETE** `/api/posts/{id}`  
   Löscht den Blog-Beitrag mit der angegebenen ID. *(Erfordert Authentifizierung)*
 
-> **Hinweis:** Weitere Details und zusätzliche Endpoints findest du in der API-Dokumentation oder im Code.
+## Upload Media Endpoint
 
-## Mitwirken
+### URL
+`POST /posts/upload`
+
+### Beschreibung
+Dieser Endpunkt ermöglicht das Hochladen von Mediendateien (z. B. Bilder, Videos) an den Server. Nach einem erfolgreichen Upload wird eine permanente URL zurückgegeben, unter der die Datei abgerufen werden kann.
+
+### Anfrageparameter
+
+- **file** (erforderlich):  
+  Die hochzuladende Datei, die als `UploadedFile` erwartet wird. Diese muss über das Formularfeld `file` gesendet werden.
+
+### Beispiel-Anfrage (cURL)
+
+      
+      curl -X POST http://127.0.0.1:8000/posts/upload \
+        -F "file=@/pfad/zur/deiner/datei.jpg"
+
+- **Erfolgreiche Antwort
+- Statuscode: **201 Created**
+- Antwortinhalt (JSON):
+
+      {
+        "url": "http://dein-server.de/uploads/media-uniqueid.jpg"
+      }
+
+- **Fehlerfälle**
+
+         Keine Datei hochgeladen oder ungültiges Dateiformat
+
+- Statuscode: **400 Bad Request**
+
+- Antwortinhalt (JSON):
+
+
+      {
+        "error": "Keine Datei hochgeladen oder ungültiges Dateiformat."
+      }
+
+**Fehler beim Hochladen**
+
+Tritt ein interner Fehler beim Verschieben der Datei in das Upload-Verzeichnis auf, wird folgender Fehler zurückgegeben:
+
+Statuscode: **500 Internal Server Error**
+
+Antwortinhalt (JSON):
+
+
+            {
+              "error": "Fehler beim Hochladen: [Fehlermeldung]"
+            }
+## Mitwirken ##
 
 Deine Ideen, Verbesserungen und Korrekturen sind herzlich willkommen! Wenn du das Projekt unterstützen und gemeinsam weiterentwickeln möchtest, folge diesen einfachen Schritten:
 
