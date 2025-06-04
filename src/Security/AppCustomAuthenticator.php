@@ -15,31 +15,28 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 
 class AppCustomAuthenticator extends AbstractAuthenticator
 {
-    private $jwtManager;
-    public function __construct(JWTTokenManagerInterface $jwtManager)
-    {
-        $this->jwtManager = $jwtManager;
-    }
+    private const LOGIN_ROUTE = '/login';
+
+    public function __construct(
+        private readonly JWTTokenManagerInterface $jwtManager
+    ) {}
+
     public function supports(Request $request): ?bool
     {
-        // Authentifiziere nur POST-Requests auf /login
-        if ($request->getPathInfo() === '/login' && $request->isMethod('POST')) {
-            return true;
-        }
-        return false;
+        return $request->getPathInfo() === self::LOGIN_ROUTE && $request->isMethod('POST');
     }
 
     public function authenticate(Request $request): Passport
     {
-        // Lese den JSON-Body aus
         $data = json_decode($request->getContent(), true);
-        $email = $data['email'] ?? '';
-        $password = $data['password'] ?? '';
 
-        // Erstelle ein Passport mit UserBadge und PasswordCredentials
+        if (!is_array($data) || !isset($data['email'], $data['password'])) {
+            throw new AuthenticationException('Ungültige Login-Daten.');
+        }
+
         return new Passport(
-            new UserBadge($email),
-            new PasswordCredentials($password)
+            new UserBadge($data['email']),
+            new PasswordCredentials($data['password'])
         );
     }
 
@@ -52,7 +49,9 @@ class AppCustomAuthenticator extends AbstractAuthenticator
 
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): ?Response
     {
-        // Bei fehlgeschlagener Authentifizierung eine Fehlermeldung zurückgeben
-        return new Response('Authentication failed: ' . $exception->getMessage(), Response::HTTP_UNAUTHORIZED);
+        return new JsonResponse([
+            'error' => 'Authentication failed',
+            'message' => $exception->getMessage()
+        ], Response::HTTP_UNAUTHORIZED);
     }
 }

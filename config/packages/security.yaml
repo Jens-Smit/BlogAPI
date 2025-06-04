@@ -12,11 +12,15 @@ security:
         login:
             pattern: ^/login
             stateless: true
-            
             json_login:
                 check_path: /login
                 username_path: email
                 password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
+
+                
+             
             custom_authenticator: App\Security\AppCustomAuthenticator
 
         api:
@@ -27,9 +31,9 @@ security:
 
     access_control:
         - { path: ^/posts, roles: PUBLIC_ACCESS, methods: [GET] }
-        - { path: ^/posts, roles: IS_AUTHENTICATED_FULLY , methods: [POST]}
+        - { path: ^/posts$, roles: IS_AUTHENTICATED_FULLY , methods: [POST]}
         - { path: ^/api/contact, roles: IS_AUTHENTICATED_ANONYMOUSLY }
-
+    
 when@test:
     security:
         password_hashers:

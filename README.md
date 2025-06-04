@@ -1,5 +1,8 @@
 # BlogAPI
+<<<<<<< HEAD
 
+=======
+>>>>>>> 87436c0 (update)
 _Einfache Symfony 6 API mit JWT-Authentifizierung_
 
 ## Übersicht
@@ -16,9 +19,15 @@ _Einfache Symfony 6 API mit JWT-Authentifizierung_
 ## Voraussetzungen
 
 - **PHP 8.1** oder höher
+<<<<<<< HEAD
 - **Composer** zum Verwalten der PHP-Abhängigkeiten
 - **Symfony CLI** (optional, aber empfohlen)
 - Eine relationale Datenbank (z. B. MySQL, PostgreSQL oder SQLite)
+=======
+- **Composer**
+- **Symfony CLI** (optional)
+- Datenbank: MySQL, PostgreSQL oder SQLite
+>>>>>>> 87436c0 (update)
 
 ## Installation
 
@@ -27,6 +36,7 @@ _Einfache Symfony 6 API mit JWT-Authentifizierung_
    ```bash
    git clone https://github.com/Jens-Smit/BlogAPI.git
    cd BlogAPI
+<<<<<<< HEAD
 
 2. *Abhängigkeiten installieren:**
 
@@ -175,3 +185,117 @@ Dieses Projekt steht unter der MIT-Lizenz – siehe die [LICENSE](LICENSE) Datei
 Bei Fragen, Anregungen oder Feedback kannst du mich jederzeit kontaktieren:
 
 - **Jens Smit** – [j.smit@hotmail.de](mailto:j.smit@hotmail.de)
+=======
+   ```
+
+2. **Abhängigkeiten installieren:**
+
+   ```bash
+   composer install
+   ```
+
+3. **Umgebungsvariablen konfigurieren:**
+
+   Passe die `.env`-Datei an deine Datenbank, JWT-Schlüssel und andere Variablen an.
+
+4. **Datenbankmigrationen ausführen:**
+
+   ```bash
+   php bin/console doctrine:migrations:migrate
+   ```
+
+5. **Server starten:**
+
+   ```bash
+   symfony server:start
+   ```
+
+   Oder alternativ:
+
+   ```bash
+   php -S localhost:8000 -t public
+   ```
+
+## API Endpoints
+
+### Authentifizierung
+
+- **POST** `/register`
+
+  ```json
+  {
+    "email": "YourEmail",
+    "password": "YourPassword"
+  }
+  ```
+
+- **POST** `/login`
+
+  ```json
+  {
+    "email": "YourEmail",
+    "password": "YourPassword"
+  }
+  ```
+
+### Blog-Beiträge
+
+- **GET** `/posts` – Listet alle Beiträge auf
+- **POST** `/posts` – Erstellt einen neuen Beitrag
+
+  **Header:**
+  ```json
+  {
+    "Authorization": "Bearer <TOKEN>"
+  }
+  ```
+
+  **Body:**
+  ```json
+  {
+    "title": "Mein neuer Blogpost",
+    "content": "Hier steht der Inhalt des Posts",
+    "titleImage": "file",
+    "images": ["file1", "file2"]
+  }
+  ```
+
+- **DELETE** `/api/posts/{id}` – Löscht einen Beitrag
+
+## Upload Media Endpoint
+
+### POST `/posts/upload`
+
+**Beispiel (cURL):**
+
+```bash
+curl -X POST http://127.0.0.1:8000/posts/upload -F "file=@/pfad/zur/deiner/datei.jpg"
+```
+
+**Erfolgreiche Antwort:**
+
+```json
+{
+  "url": "http://dein-server.de/uploads/media-uniqueid.jpg"
+}
+```
+
+**Fehlerantworten:**
+- 400 Bad Request – Keine Datei hochgeladen oder ungültig
+- 500 Internal Server Error – Fehler beim Speichern
+
+## Mitwirken
+
+1. Forke das Repository.
+2. Erstelle einen neuen Branch (`git checkout -b feature/DeinFeature`).
+3. Ändere den Code und füge Tests hinzu.
+4. Reiche einen Pull Request ein.
+
+## Lizenz
+
+Dieses Projekt steht unter der MIT-Lizenz – siehe die [LICENSE](LICENSE).
+
+## Kontakt
+
+**Jens Smit** – [j.smit@hotmail.de](mailto:j.smit@hotmail.de)
+>>>>>>> 87436c0 (update)
