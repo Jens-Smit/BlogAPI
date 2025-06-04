@@ -2,6 +2,7 @@
 /vendor/
 /var/
 /.env.local
+.env.dev
 .env.test.local
 .env.*.local
 .phpunit.result.cache
