@@ -30,9 +30,11 @@ security:
             jwt: ~
 
     access_control:
+        - { path: ^/api/contact, roles: PUBLIC_ACCESS }
         - { path: ^/posts, roles: PUBLIC_ACCESS, methods: [GET] }
-        - { path: ^/posts$, roles: IS_AUTHENTICATED_FULLY , methods: [POST]}
-        - { path: ^/api/contact, roles: IS_AUTHENTICATED_ANONYMOUSLY }
+        - { path: ^/posts$, roles: IS_AUTHENTICATED_FULLY , methods: [POST, PUT, DELETE]}
+        - { path: ^/posts/upload, roles: IS_AUTHENTICATED_FULLY , methods: [POST]}
+        
     
 when@test:
     security:

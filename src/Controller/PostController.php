@@ -42,7 +42,7 @@ class PostController extends AbstractController
         $json = $serializer->serialize($posts, 'json', ['groups' => 'post']);
         return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
-    /**
+     /**
      * @OA\Post(
      *     path="/posts",
      *     summary="Neuen Blogpost erstellen",
@@ -72,25 +72,27 @@ class PostController extends AbstractController
     #[Route('/posts', name: 'create_post', methods: ['POST'])]
     public function create(Request $request, PostService $postService, Security $security): JsonResponse
     {
-        $dto = new PostCreateDTO(
+      $dto = new PostCreateDTO(
             $request->request->get('title', ''),
             $request->request->get('content', null),
             $request->files->get('titleImage'),
             $request->files->get('images', [])
         );
 
+        // Die Titelprüfung dient nun als zusätzliche Validierung, falls der Titel zwar vorhanden, aber leer ist
         if (!$dto->title) {
             return new JsonResponse(['error' => 'Titel ist erforderlich.'], 400);
         }
 
         try {
+            
             $post = $postService->createPost($dto, $security->getUser());
             return new JsonResponse(['message' => 'Post erfolgreich erstellt', 'id' => $post->getId()], 201);
         } catch (\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], 500);
         }
     }
-    /**
+     /**
      * @OA\Put(
      *     path="/posts/{id}",
      *     summary="Blogpost aktualisieren",
@@ -126,11 +128,15 @@ class PostController extends AbstractController
      *     security={{"bearerAuth":{}}}
      * )
      */
-    #[Route('/posts/{id}', name: 'update_post', methods: ['PUT'])]
+    #[Route('/posts/{id}', name: 'update_post', methods: ['POST'])]
     public function update(int $id, Request $request, EntityManagerInterface $em, PostService $postService, Security $security): JsonResponse
     {
-        $post = $em->getRepository(Post::class)->find($id);
 
+       
+
+        $post = $em->getRepository(Post::class)->find($id);
+           
+        return new JsonResponse($request->request->all());
         if (!$post) {
             return new JsonResponse(['error' => 'Post nicht gefunden'], 404);
         }
@@ -138,16 +144,19 @@ class PostController extends AbstractController
         if ($post->getAuthor() !== $security->getUser()) {
             return new JsonResponse(['error' => 'Keine Berechtigung'], 403);
         }
-
+       
+        // ACHTUNG: Hier wieder von $request->request abrufen für form-data!
         $dto = new PostUpdateDTO(
             id: $id,
-            title: $request->request->get('title', ''),
-            content: $request->request->get('content'),
+            title: $request->request->get('title', ''),     // <= Korrigiert für form-data
+            content: $request->request->get('content', ''), // <= Korrigiert für form-data
             titleImage: $request->files->get('titleImage'),
-            images: $request->files->get('images')
+            images: $request->files->get('images', [])
         );
 
         if (!$dto->title) {
+           
+          // Der rohe Request-Body (bei form-data meist binär oder schwer lesbar)
             return new JsonResponse(['error' => 'Titel ist erforderlich.'], 400);
         }
 
@@ -158,7 +167,7 @@ class PostController extends AbstractController
             return new JsonResponse(['error' => $e->getMessage()], 500);
         }
     }
-    /**
+     /**
      * @OA\Post(
      *     path="/posts/upload",
      *     summary="Mediendatei hochladen",
@@ -174,7 +183,8 @@ class PostController extends AbstractController
      *     ),
      *     @OA\Response(response=201, description="Upload erfolgreich, URL der Datei zurückgegeben"),
      *     @OA\Response(response=400, description="Keine Datei vorhanden"),
-     *     @OA\Response(response=500, description="Fehler beim Upload")
+     *     @OA\Response(response=500, description="Fehler beim Upload"),
+     *     security={{"bearerAuth":{}}}
      * )
      */
     #[Route('/posts/upload', name: 'upload_media', methods: ['POST'])]
@@ -196,7 +206,7 @@ class PostController extends AbstractController
             return new JsonResponse(['error' => 'Fehler beim Upload: ' . $e->getMessage()], 500);
         }
     }
-    /**
+     /**
      * @OA\Delete(
      *     path="/posts/{id}",
      *     summary="Blogpost löschen",
@@ -210,7 +220,8 @@ class PostController extends AbstractController
      *     ),
      *     @OA\Response(response=200, description="Post gelöscht"),
      *     @OA\Response(response=403, description="Keine Berechtigung"),
-     *     @OA\Response(response=404, description="Post nicht gefunden")
+     *     @OA\Response(response=404, description="Post nicht gefunden"),
+     *     security={{"bearerAuth":{}}}
      * )
      */
     #[Route('/posts/{id}', name: 'delete_post', methods: ['DELETE'])]

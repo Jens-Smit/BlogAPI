@@ -8,9 +8,22 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
-
+use OpenApi\Attributes as OA; 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: '`user`')]
+#[OA\Schema( // <-- Schema-Definition für die User-Klasse
+    schema: 'User', // Der Name, unter dem das Schema in der Doku erscheint
+    title: 'Benutzer',
+    description: 'Repräsentiert einen registrierten Benutzer der Blog-API',
+    properties: [
+        new OA\Property(property: 'id', type: 'integer', readOnly: true, example: 1, description: 'Eindeutige ID des Benutzers'),
+        new OA\Property(property: 'email', type: 'string', format: 'email', example: 'user@example.com', description: 'E-Mail-Adresse des Benutzers (als eindeutiger Identifier)'),
+        new OA\Property(property: 'roles', type: 'array', items: new OA\Items(type: 'string'), example: ['ROLE_USER'], description: 'Zugewiesene Rollen des Benutzers'),
+        // Das Passwort wird hier NICHT dokumentiert, da es nicht über die API gelesen/gesendet werden sollte
+        // Wenn du Posts des Benutzers in der Doku anzeigen möchtest, kannst du das hier tun:
+        // new OA\Property(property: 'posts', type: 'array', items: new OA\Items(ref: '#/components/schemas/Post'), description: 'Liste der vom Benutzer erstellten Posts')
+    ]
+)]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
