@@ -144,42 +144,43 @@ class PostController extends AbstractController
         }
     }
 
-    /**
-     * @OA\Put(
-     * path="/posts/{id}",
-     * summary="Blogpost aktualisieren",
-     * tags={"Posts"},
-     * @OA\Parameter(
-     * name="id",
-     * in="path",
-     * description="ID des Posts",
-     * required=true,
-     * @OA\Schema(type="integer")
-     * ),
-     * @OA\RequestBody(
-     * required=true,
-     * @OA\MediaType(
-     * mediaType="multipart/form-data",
-     * @OA\Schema(
-     * @OA\Property(property="title", type="string", example="Aktualisierter Titel"),
-     * @OA\Property(property="content", type="string", example="Neuer Inhalt"),
-     * @OA\Property(property="titleImage", type="string", format="binary"),
-     * @OA\Property(
-     * property="images",
-     * type="array",
-     * @OA\Items(type="string", format="binary")
-     * )
-     * )
-     * )
-     * ),
-     * @OA\Response(response=200, description="Post erfolgreich aktualisiert"),
-     * @OA\Response(response=400, description="Titel ist erforderlich"),
-     * @OA\Response(response=403, description="Keine Berechtigung"),
-     * @OA\Response(response=404, description="Post nicht gefunden"),
-     * @OA\Response(response=500, description="Serverfehler"),
-     * security={{"bearerAuth":{}}}
-     * )
-     */
+   /**
+ * @OA\Post(
+ *   path="/posts/{id}",
+ *   summary="Blogpost aktualisieren",
+ *   tags={"Posts"},
+ *   @OA\Parameter(
+ *     name="id",
+ *     in="path",
+ *     required=true,
+ *     description="ID des Posts",
+ *     @OA\Schema(type="integer")
+ *   ),
+ *   @OA\RequestBody(
+ *     required=true,
+ *     @OA\MediaType(
+ *       mediaType="multipart/form-data",
+ *       @OA\Schema(
+ *         @OA\Property(property="title", type="string", example="Aktualisierter Titel"),
+ *         @OA\Property(property="content", type="string", example="Neuer Inhalt"),
+ *         @OA\Property(property="titleImage", type="string", format="binary", nullable=true),
+ *         @OA\Property(
+ *           property="images",
+ *           type="array",
+ *           @OA\Items(type="string", format="binary")
+ *         )
+ *       )
+ *     )
+ *   ),
+ *   @OA\Response(response=200, description="Post erfolgreich aktualisiert"),
+ *   @OA\Response(response=400, description="Titel ist erforderlich"),
+ *   @OA\Response(response=403, description="Keine Berechtigung"),
+ *   @OA\Response(response=404, description="Post nicht gefunden"),
+ *   @OA\Response(response=500, description="Serverfehler"),
+ *   security={{"bearerAuth":{}}}
+ * )
+ */
+
     #[Route('/posts/{id}', name: 'update_post', methods: ['POST'])]
     public function update(int $id, Request $request, EntityManagerInterface $em, PostService $postService, Security $security): JsonResponse
     {

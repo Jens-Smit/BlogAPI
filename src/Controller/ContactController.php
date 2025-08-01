@@ -5,17 +5,18 @@ namespace App\Controller;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Annotation\Route; // Wichtig: Für #[Route] Attribut
+use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 use Symfony\Component\Validator\Constraints as Assert;
-use Psr\Log\LoggerInterface; // Für Logging hinzufügen
+use Psr\Log\LoggerInterface;
+
+use OpenApi\Annotations as OA;
 
 class ContactController extends AbstractController
 {
-    // Konstruktor, um Logger zu injizieren (optional, aber gute Praxis)
     private LoggerInterface $logger;
 
     public function __construct(LoggerInterface $logger)
@@ -23,19 +24,62 @@ class ContactController extends AbstractController
         $this->logger = $logger;
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/contact",
+     *     summary="Kontaktformular absenden",
+     *     tags={"Kontakt"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="application/json",
+     *             @OA\Schema(
+     *                 required={"name", "email", "subject", "message"},
+     *                 @OA\Property(property="name", type="string", example="Max Mustermann"),
+     *                 @OA\Property(property="email", type="string", format="email", example="max@example.com"),
+     *                 @OA\Property(property="subject", type="string", example="Frage zum Produkt"),
+     *                 @OA\Property(property="message", type="string", example="Hallo, ich habe eine Frage...")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Kontaktanfrage erfolgreich versendet",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Ihre Nachricht wurde erfolgreich gesendet.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Validierungsfehler oder ungültige Daten",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Validierungsfehler"),
+     *             @OA\Property(
+     *                 property="errors",
+     *                 type="object",
+     *                 additionalProperties=@OA\Schema(type="string")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Serverfehler beim Senden der E-Mail",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="Beim Senden der Nachricht ist ein Fehler aufgetreten.")
+     *         )
+     *     )
+     * )
+     */
     #[Route('/api/contact', name: 'api_contact_submit', methods: ['POST'])]
-    public function submitContact(Request $request, MailerInterface $mailer,  ValidatorInterface $validator): JsonResponse
+    public function submitContact(Request $request, MailerInterface $mailer, ValidatorInterface $validator): JsonResponse
     {
-        // 1. Daten aus dem Request-Body holen
         $data = json_decode($request->getContent(), true);
 
-        // Prüfen, ob die Daten korrekt empfangen wurden
         if (json_last_error() !== JSON_ERROR_NONE) {
             $this->logger->error('Invalid JSON data received for contact form.');
             return new JsonResponse(['message' => 'Ungültige JSON-Daten.'], Response::HTTP_BAD_REQUEST);
         }
 
-        // 2. Daten validieren
         $inputBag = new Assert\Collection([
             'name' => new Assert\NotBlank(['message' => 'Der Name darf nicht leer sein.']),
             'email' => [
@@ -44,7 +88,6 @@ class ContactController extends AbstractController
             ],
             'subject' => new Assert\NotBlank(['message' => 'Der Betreff darf nicht leer sein.']),
             'message' => new Assert\NotBlank(['message' => 'Die Nachricht darf nicht leer sein.']),
-            // WICHTIG: Kein CAPTCHA-Feld hier, da die Verifizierung bereits im Frontend erfolgt ist
         ]);
 
         $violations = $validator->validate($data, $inputBag);
@@ -58,17 +101,15 @@ class ContactController extends AbstractController
             return new JsonResponse(['message' => 'Validierungsfehler', 'errors' => $errors], Response::HTTP_BAD_REQUEST);
         }
 
-        // Daten aus dem validierten Array extrahieren
         $name = $data['name'];
         $email = $data['email'];
         $subject = $data['subject'];
         $messageContent = $data['message'];
 
-        // 3. E-Mail senden (Beispiel-Implementierung)
         try {
             $emailMessage = (new Email())
-                ->from($email) // Absender ist die E-Mail des Benutzers
-                ->to('info@Jenssmit.de') // <-- ÄNDERN: Deine E-Mail-Adresse hier einfügen
+                ->from($email)
+                ->to('info@Jenssmit.de')
                 ->subject('Kontaktformular: ' . $subject)
                 ->html(
                     '<p><strong>Name:</strong> ' . htmlspecialchars($name) . '</p>' .

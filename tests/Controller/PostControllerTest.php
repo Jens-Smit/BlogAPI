@@ -174,12 +174,16 @@ class PostControllerTest extends WebTestCase
             true
         );
 
+        // ✅ Test-User einloggen (fehlte!)
+        $this->client->loginUser($this->user);
+
         // 2) POST an /posts/upload senden
         $this->client->request('POST', '/posts/upload', [], ['file' => $file]);
 
         // 3) Antwort prüfen
         $response = $this->client->getResponse();
         $this->assertEquals(201, $response->getStatusCode());
+
         $data = json_decode($response->getContent(), true);
         $this->assertArrayHasKey('url', $data);
         $this->assertStringContainsString('/uploads/', $data['url']);
@@ -187,8 +191,11 @@ class PostControllerTest extends WebTestCase
         // 4) Temporäre Datei löschen
         @unlink($filePath);
     }
+
     public function testUpdatePost(): void
     {
+        $this->client->loginUser($this->user); // ✅ Auth hinzufügen
+
         // Post anlegen
         $post = new Post();
         $post->setTitle('Alter Titel');
@@ -200,13 +207,11 @@ class PostControllerTest extends WebTestCase
 
         $postId = $post->getId();
 
-        $this->client->loginUser($this->user);
-
         $titleImagePath = $this->createTempImage('update_title.jpg');
         $titleImage = new UploadedFile($titleImagePath, 'update_title.jpg', 'image/jpeg', null, true);
 
         $this->client->request(
-            'PUT',
+            'POST',
             '/posts/' . $postId,
             [
                 'title' => 'Neuer Titel',
@@ -226,6 +231,7 @@ class PostControllerTest extends WebTestCase
         // Temporäre Datei löschen
         @unlink($titleImagePath);
     }
+
 
 
 }
