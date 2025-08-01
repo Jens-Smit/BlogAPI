@@ -17,22 +17,23 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Security\Core\Security;
 use Nelmio\ApiDocBundle\Annotation\Model;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class PostController extends AbstractController
 {
     /**
      * @OA\Get(
-     *     path="/posts",
-     *     summary="Alle Blogposts abrufen",
-     *     tags={"Posts"},
-     *     @OA\Response(
-     *         response=200,
-     *         description="Liste aller Posts",
-     *         @OA\JsonContent(
-     *             type="array",
-     *             @OA\Items(ref=@Model(type=Post::class, groups={"post"}))
-     *         )
-     *     )
+     * path="/posts",
+     * summary="Alle Blogposts abrufen",
+     * tags={"Posts"},
+     * @OA\Response(
+     * response=200,
+     * description="Liste aller Posts",
+     * @OA\JsonContent(
+     * type="array",
+     * @OA\Items(ref=@Model(type=Post::class, groups={"post"}))
+     * )
+     * )
      * )
      */
     #[Route('/posts', name: 'get_posts', methods: ['GET'])]
@@ -43,40 +44,48 @@ class PostController extends AbstractController
         return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
      /**
-     * @OA\Post(
-     *     path="/posts",
-     *     summary="Neuen Blogpost erstellen",
-     *     tags={"Posts"},
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\MediaType(
-     *             mediaType="multipart/form-data",
-     *             @OA\Schema(
-     *                 @OA\Property(property="title", type="string", example="Mein erster Post"),
-     *                 @OA\Property(property="content", type="string", example="Das ist der Inhalt"),
-     *                 @OA\Property(property="titleImage", type="string", format="binary"),
-     *                 @OA\Property(
-     *                     property="images",
-     *                     type="array",
-     *                     @OA\Items(type="string", format="binary")
-     *                 )
-     *             )
-     *         )
-     *     ),
-     *     @OA\Response(response=201, description="Post erfolgreich erstellt"),
-     *     @OA\Response(response=400, description="Titel ist erforderlich"),
-     *     @OA\Response(response=500, description="Serverfehler"),
-     *     security={{"bearerAuth":{}}}
-     * )
-     */
+      * @OA\Post(
+      * path="/posts",
+      * summary="Neuen Blogpost erstellen",
+      * tags={"Posts"},
+      * @OA\RequestBody(
+      * required=true,
+      * @OA\MediaType(
+      * mediaType="multipart/form-data",
+      * @OA\Schema(
+      * @OA\Property(property="title", type="string", example="Mein erster Post"),
+      * @OA\Property(property="content", type="string", example="Das ist der Inhalt"),
+      * @OA\Property(property="titleImage", type="string", format="binary"),
+      * @OA\Property(
+      * property="images",
+      * type="array",
+      * @OA\Items(type="string", format="binary")
+      * )
+      * )
+      * )
+      * ),
+      * @OA\Response(response=201, description="Post erfolgreich erstellt"),
+      * @OA\Response(response=400, description="Titel ist erforderlich"),
+      * @OA\Response(response=500, description="Serverfehler"),
+      * security={{"bearerAuth":{}}}
+      * )
+      */
     #[Route('/posts', name: 'create_post', methods: ['POST'])]
     public function create(Request $request, PostService $postService, Security $security): JsonResponse
     {
-      $dto = new PostCreateDTO(
+        $uploadedImages = $request->files->get('images', []);
+        // Stellen Sie sicher, dass $uploadedImages immer ein Array ist
+        if (!is_array($uploadedImages) && $uploadedImages instanceof UploadedFile) {
+            $uploadedImages = [$uploadedImages];
+        } elseif ($uploadedImages === null) {
+            $uploadedImages = []; // Wenn null, dann leeres Array
+        }
+
+        $dto = new PostCreateDTO(
             $request->request->get('title', ''),
             $request->request->get('content', null),
             $request->files->get('titleImage'),
-            $request->files->get('images', [])
+            $uploadedImages // <-- KORRIGIERT: Hier die vorbereitete Variable verwenden!
         );
 
         // Die Titelprüfung dient nun als zusätzliche Validierung, falls der Titel zwar vorhanden, aber leer ist
@@ -89,102 +98,29 @@ class PostController extends AbstractController
             $post = $postService->createPost($dto, $security->getUser());
             return new JsonResponse(['message' => 'Post erfolgreich erstellt', 'id' => $post->getId()], 201);
         } catch (\Throwable $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 500);
+            // Fehler im Log festhalten
+            error_log('Fehler beim Erstellen des Posts: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return new JsonResponse(['error' => 'Fehler beim Erstellen des Posts: ' . $e->getMessage()], 500);
         }
     }
-     /**
-     * @OA\Put(
-     *     path="/posts/{id}",
-     *     summary="Blogpost aktualisieren",
-     *     tags={"Posts"},
-     *     @OA\Parameter(
-     *         name="id",
-     *         in="path",
-     *         description="ID des Posts",
-     *         required=true,
-     *         @OA\Schema(type="integer")
-     *     ),
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\MediaType(
-     *             mediaType="multipart/form-data",
-     *             @OA\Schema(
-     *                 @OA\Property(property="title", type="string", example="Aktualisierter Titel"),
-     *                 @OA\Property(property="content", type="string", example="Neuer Inhalt"),
-     *                 @OA\Property(property="titleImage", type="string", format="binary"),
-     *                 @OA\Property(
-     *                     property="images",
-     *                     type="array",
-     *                     @OA\Items(type="string", format="binary")
-     *                 )
-     *             )
-     *         )
-     *     ),
-     *     @OA\Response(response=200, description="Post erfolgreich aktualisiert"),
-     *     @OA\Response(response=400, description="Titel ist erforderlich"),
-     *     @OA\Response(response=403, description="Keine Berechtigung"),
-     *     @OA\Response(response=404, description="Post nicht gefunden"),
-     *     @OA\Response(response=500, description="Serverfehler"),
-     *     security={{"bearerAuth":{}}}
-     * )
-     */
-    #[Route('/posts/{id}', name: 'update_post', methods: ['POST'])]
-    public function update(int $id, Request $request, EntityManagerInterface $em, PostService $postService, Security $security): JsonResponse
-    {
-
-       
-
-        $post = $em->getRepository(Post::class)->find($id);
-           
-        return new JsonResponse($request->request->all());
-        if (!$post) {
-            return new JsonResponse(['error' => 'Post nicht gefunden'], 404);
-        }
-
-        if ($post->getAuthor() !== $security->getUser()) {
-            return new JsonResponse(['error' => 'Keine Berechtigung'], 403);
-        }
-       
-        // ACHTUNG: Hier wieder von $request->request abrufen für form-data!
-        $dto = new PostUpdateDTO(
-            id: $id,
-            title: $request->request->get('title', ''),     // <= Korrigiert für form-data
-            content: $request->request->get('content', ''), // <= Korrigiert für form-data
-            titleImage: $request->files->get('titleImage'),
-            images: $request->files->get('images', [])
-        );
-
-        if (!$dto->title) {
-           
-          // Der rohe Request-Body (bei form-data meist binär oder schwer lesbar)
-            return new JsonResponse(['error' => 'Titel ist erforderlich.'], 400);
-        }
-
-        try {
-            $updatedPost = $postService->updatePost($post, $dto);
-            return new JsonResponse(['message' => 'Post erfolgreich aktualisiert', 'id' => $updatedPost->getId()], 200);
-        } catch (\Throwable $e) {
-            return new JsonResponse(['error' => $e->getMessage()], 500);
-        }
-    }
-     /**
+    /**
      * @OA\Post(
-     *     path="/posts/upload",
-     *     summary="Mediendatei hochladen",
-     *     tags={"Uploads"},
-     *     @OA\RequestBody(
-     *         required=true,
-     *         @OA\MediaType(
-     *             mediaType="multipart/form-data",
-     *             @OA\Schema(
-     *                 @OA\Property(property="file", type="string", format="binary")
-     *             )
-     *         )
-     *     ),
-     *     @OA\Response(response=201, description="Upload erfolgreich, URL der Datei zurückgegeben"),
-     *     @OA\Response(response=400, description="Keine Datei vorhanden"),
-     *     @OA\Response(response=500, description="Fehler beim Upload"),
-     *     security={{"bearerAuth":{}}}
+     * path="/posts/upload",
+     * summary="Mediendatei hochladen",
+     * tags={"Uploads"},
+     * @OA\RequestBody(
+     * required=true,
+     * @OA\MediaType(
+     * mediaType="multipart/form-data",
+     * @OA\Schema(
+     * @OA\Property(property="file", type="string", format="binary")
+     * )
+     * )
+     * ),
+     * @OA\Response(response=201, description="Upload erfolgreich, URL der Datei zurückgegeben"),
+     * @OA\Response(response=400, description="Keine Datei vorhanden"),
+     * @OA\Response(response=500, description="Fehler beim Upload"),
+     * security={{"bearerAuth":{}}}
      * )
      */
     #[Route('/posts/upload', name: 'upload_media', methods: ['POST'])]
@@ -203,27 +139,106 @@ class PostController extends AbstractController
             $url = $request->getSchemeAndHttpHost() . '/uploads/' . $filename;
             return new JsonResponse(['url' => $url], 201);
         } catch (\Exception $e) {
+            error_log('Fehler beim Upload der Mediendatei: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return new JsonResponse(['error' => 'Fehler beim Upload: ' . $e->getMessage()], 500);
         }
     }
-     /**
-     * @OA\Delete(
-     *     path="/posts/{id}",
-     *     summary="Blogpost löschen",
-     *     tags={"Posts"},
-     *     @OA\Parameter(
-     *         name="id",
-     *         in="path",
-     *         description="ID des zu löschenden Posts",
-     *         required=true,
-     *         @OA\Schema(type="integer")
-     *     ),
-     *     @OA\Response(response=200, description="Post gelöscht"),
-     *     @OA\Response(response=403, description="Keine Berechtigung"),
-     *     @OA\Response(response=404, description="Post nicht gefunden"),
-     *     security={{"bearerAuth":{}}}
+
+    /**
+     * @OA\Put(
+     * path="/posts/{id}",
+     * summary="Blogpost aktualisieren",
+     * tags={"Posts"},
+     * @OA\Parameter(
+     * name="id",
+     * in="path",
+     * description="ID des Posts",
+     * required=true,
+     * @OA\Schema(type="integer")
+     * ),
+     * @OA\RequestBody(
+     * required=true,
+     * @OA\MediaType(
+     * mediaType="multipart/form-data",
+     * @OA\Schema(
+     * @OA\Property(property="title", type="string", example="Aktualisierter Titel"),
+     * @OA\Property(property="content", type="string", example="Neuer Inhalt"),
+     * @OA\Property(property="titleImage", type="string", format="binary"),
+     * @OA\Property(
+     * property="images",
+     * type="array",
+     * @OA\Items(type="string", format="binary")
+     * )
+     * )
+     * )
+     * ),
+     * @OA\Response(response=200, description="Post erfolgreich aktualisiert"),
+     * @OA\Response(response=400, description="Titel ist erforderlich"),
+     * @OA\Response(response=403, description="Keine Berechtigung"),
+     * @OA\Response(response=404, description="Post nicht gefunden"),
+     * @OA\Response(response=500, description="Serverfehler"),
+     * security={{"bearerAuth":{}}}
      * )
      */
+    #[Route('/posts/{id}', name: 'update_post', methods: ['POST'])]
+    public function update(int $id, Request $request, EntityManagerInterface $em, PostService $postService, Security $security): JsonResponse
+    {
+        $post = $em->getRepository(Post::class)->find($id);
+            
+        if (!$post) {
+            return new JsonResponse(['error' => 'Post nicht gefunden'], 404);
+        }
+
+        if ($post->getAuthor() !== $security->getUser()) {
+            return new JsonResponse(['error' => 'Keine Berechtigung'], 403);
+        }
+        
+        $images = $request->files->get('images', []);
+        if (!is_array($images) && $images instanceof UploadedFile) {
+             $images = [$images];
+        } elseif ($images === null) {
+            $images = [];
+        }
+
+
+        $dto = new PostUpdateDTO(
+            id: $id,
+            title: $request->request->get('title', ''),
+            content: $request->request->get('content', ''),
+            titleImage: $request->files->get('titleImage'),
+            images: $images
+        );
+
+        if (!$dto->title) {
+            return new JsonResponse(['error' => 'Titel ist erforderlich.'], 400);
+        }
+
+        try {
+            $updatedPost = $postService->updatePost($post, $dto);
+            return new JsonResponse(['message' => 'Post erfolgreich aktualisiert', 'id' => $updatedPost->getId()], 200);
+        } catch (\Throwable $e) {
+            error_log('Fehler beim Aktualisieren des Posts: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return new JsonResponse(['error' => 'Fehler beim Aktualisieren des Posts: ' . $e->getMessage()], 500);
+        }
+    }
+     /**
+      * @OA\Delete(
+      * path="/posts/{id}",
+      * summary="Blogpost löschen",
+      * tags={"Posts"},
+      * @OA\Parameter(
+      * name="id",
+      * in="path",
+      * description="ID des zu löschenden Posts",
+      * required=true,
+      * @OA\Schema(type="integer")
+      * ),
+      * @OA\Response(response=200, description="Post gelöscht"),
+      * @OA\Response(response=403, description="Keine Berechtigung"),
+      * @OA\Response(response=404, description="Post nicht gefunden"),
+      * security={{"bearerAuth":{}}}
+      * )
+      */
     #[Route('/posts/{id}', name: 'delete_post', methods: ['DELETE'])]
     public function delete(int $id, EntityManagerInterface $em, Security $security): JsonResponse
     {

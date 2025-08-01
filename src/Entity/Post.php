@@ -26,7 +26,7 @@ class Post
 
     #[ORM\Column(nullable: true)]
     #[Groups("post")]
-    private ?array $titleImage = null;
+    private ?string $titleImage = null;
 
     #[ORM\Column(nullable: true)]
     #[Groups("post")]
@@ -70,12 +70,12 @@ class Post
         return $this;
     }
 
-    public function getTitleImage(): ?array
+    public function getTitleImage(): ?string
     {
         return $this->titleImage;
     }
 
-    public function setTitleImage(?array $titleImage): static
+    public function setTitleImage(?string $titleImage): static
     {
         $this->titleImage = $titleImage;
 
