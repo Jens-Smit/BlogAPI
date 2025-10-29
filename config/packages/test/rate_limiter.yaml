@@ -1,0 +1,15 @@
+# config/packages/rate_limiter.yaml
+framework:
+    rate_limiter:
+        # Login Rate Limiter (5 Versuche pro 15 Minuten)
+        login:
+            policy: 'no_limit'
+        
+        token_refresh:
+            policy: 'no_limit'
+        
+        password_reset:
+            policy: 'no_limit'
+        
+        api:
+            policy: 'no_limit'

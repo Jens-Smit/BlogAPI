@@ -1,0 +1,46 @@
+# Symfony / Composer / PHP
+/vendor/
+/var/
+/.env.local
+.env.dev
+.env.test.local
+.env.*.local
+.phpunit.result.cache
+/public/bundles/
+/public/uploads/
+/config/jwt/private.pem
+/config/jwt/public.pem
+
+# Cache / Logs
+/var/cache/
+/var/log/
+/var/tmp/
+/*.log
+
+# Coverage
+coverage/
+
+# Node.js
+/node_modules/
+/npm-debug.log
+yarn-error.log
+
+# Docker
+.docker/
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# IDE / Editor
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# MacOS / Windows
+.DS_Store
+Thumbs.db
+public/uploads/*
+
+public/uploads/
+

@@ -1,0 +1,25 @@
+# config/packages/rate_limiter.yaml
+framework:
+    rate_limiter:
+        # Login Rate Limiter (5 Versuche pro 15 Minuten)
+        login:
+            policy: 'sliding_window'
+            limit: 5
+            interval: '15 minutes'
+        
+        # Token Refresh (20 Versuche pro Stunde)
+        token_refresh:
+            policy: 'sliding_window'
+            limit: 20
+            interval: '1 hour'
+        
+        # Password Reset Request (3 Versuche pro Stunde)
+        password_reset:
+            policy: 'sliding_window'
+            limit: 3
+            interval: '1 hour'
+        # API Rate Limiter (100 Requests pro Minute)
+        api:
+            policy: 'sliding_window'
+            limit: 100
+            interval: '1 minute'
