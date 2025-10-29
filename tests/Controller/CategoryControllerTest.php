@@ -66,7 +66,6 @@ class CategoryControllerTest extends WebTestCase
         $this->em->flush();
 
         $this->client->request('GET', '/api/categories');
-
         $this->assertResponseIsSuccessful();
 
         $decoded = json_decode($this->client->getResponse()->getContent(), true);
