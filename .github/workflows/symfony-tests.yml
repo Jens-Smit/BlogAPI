@@ -36,11 +36,11 @@ jobs:
 
     - name: Copy .env.test.local
       run: php -r "file_exists('.env.test.local') || copy('.env.test', '.env.test.local');"
-      
-    - name: Create db_blog database
+
+    - name: Create test_blog_test database
       run: |
         sudo apt-get install -y mysql-client
-        mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS db_blog;"
+        mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS test_blog_test;"
 
     - name: Install Composer dependencies
       run: composer install --no-interaction --prefer-dist
