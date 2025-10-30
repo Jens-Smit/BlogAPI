@@ -43,8 +43,10 @@ jobs:
     - name: Run Symfony cache clear
       run: php bin/console cache:clear --env=test
 
-    - name: Run Doctrine migrations
+    - name: Run Doctrine make:migration
       run: php bin/console make:migration
+
+    - name: Run Doctrine migrations migrate
       run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
 
     - name: Run PHPUnit tests
