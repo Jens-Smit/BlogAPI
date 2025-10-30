@@ -36,12 +36,19 @@ jobs:
 
     - name: Copy .env.test.local
       run: php -r "file_exists('.env.test.local') || copy('.env.test', '.env.test.local');"
+      
+    - name: Create db_blog database
+      run: |
+        sudo apt-get install -y mysql-client
+        mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS db_blog;"
 
     - name: Install Composer dependencies
       run: composer install --no-interaction --prefer-dist
 
     - name: Run Symfony cache clear
       run: php bin/console cache:clear --env=test
+
+    
 
     - name: Run Doctrine make:migration
       run: php bin/console make:migration
