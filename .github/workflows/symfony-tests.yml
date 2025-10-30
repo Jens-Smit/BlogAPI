@@ -16,45 +16,67 @@ jobs:
         env:
           MYSQL_ALLOW_EMPTY_PASSWORD: yes
           MYSQL_DATABASE: test_db
-        ports: [3306:3306]
+        ports:
+          - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping"
+          --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=3
 
+    env:
+      # Überschreibt .env.test / .env.test.local in Actions-Umgebung
+      DATABASE_URL: "mysql://root:@127.0.0.1:3306/db_blog"
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.2'
-        extensions: mbstring, pdo_mysql
-        coverage: none
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql, xml
+          coverage: none
 
-    - name: Copy .env.test.local
-      run: php -r "file_exists('.env.test.local') || copy('.env.test', '.env.test.local');"
+      - name: Ensure migrations directory exists
+        run: |
+          if [ ! -d migrations ]; then mkdir -p migrations; fi
+          if [ ! -f migrations/.gitkeep ]; then touch migrations/.gitkeep; fi
+          git ls-files --error-unmatch migrations/.gitkeep || echo "migrations/.gitkeep not tracked (ok for CI)"
 
-    - name: Create test_blog_test database
-      run: |
-        sudo apt-get install -y mysql-client
-        mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS test_blog_test;"
+      - name: Wait for MySQL to be ready
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y mysql-client
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -P 3306 --silent && break
+            echo "Waiting for mysql..."
+            sleep 2
+          done
 
-    - name: Install Composer dependencies
-      run: composer install --no-interaction --prefer-dist
+      - name: Create db_blog database
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS db_blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-    - name: Run Symfony cache clear
-      run: php bin/console cache:clear --env=test
+      - name: Copy .env.test.local
+        run: php -r "file_exists('.env.test.local') || copy('.env.test', '.env.test.local');"
 
-    
+      - name: Install Composer dependencies (with cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+      - name: Composer install
+        run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
 
-    - name: Run Doctrine make:migration
-      run: php bin/console make:migration
+      - name: Run Symfony cache clear (test)
+        run: php bin/console cache:clear --env=test
 
-    - name: Run Doctrine migrations migrate
-      run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
+      - name: Run Doctrine migrations (test)
+        run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
 
-    - name: Run PHPUnit tests
-      run: php bin/phpunit
+      - name: Run PHPUnit tests
+        run: php -d memory_limit=2G vendor/bin/phpunit --testsuite default
