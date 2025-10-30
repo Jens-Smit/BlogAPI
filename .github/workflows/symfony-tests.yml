@@ -2,9 +2,9 @@ name: Run Symfony Tests
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 jobs:
   symfony-tests:
@@ -25,8 +25,8 @@ jobs:
           --health-retries=3
 
     env:
-      # Überschreibt .env.test / .env.test.local in Actions-Umgebung
-      DATABASE_URL: "mysql://root:@127.0.0.1:3306/db_blog"
+      # Überschreibe DATABASE_URL so, dass sie der lokalen .env.test entspricht
+      DATABASE_URL: "mysql://root:@127.0.0.1:3306/test_blog?serverVersion=8.0"
 
     steps:
       - name: Checkout code
@@ -45,7 +45,7 @@ jobs:
           if [ ! -f migrations/.gitkeep ]; then touch migrations/.gitkeep; fi
           git ls-files --error-unmatch migrations/.gitkeep || echo "migrations/.gitkeep not tracked (ok for CI)"
 
-      - name: Wait for MySQL to be ready
+      - name: Wait for MySQL to be ready and create test_blog DB
         run: |
           sudo apt-get update -y
           sudo apt-get install -y mysql-client
@@ -54,22 +54,20 @@ jobs:
             echo "Waiting for mysql..."
             sleep 2
           done
-
-      - name: Create db_blog database
-        run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS db_blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS test_blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
       - name: Copy .env.test.local
         run: php -r "file_exists('.env.test.local') || copy('.env.test', '.env.test.local');"
 
-      - name: Install Composer dependencies (with cache)
+      - name: Cache Composer packages
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
-      - name: Composer install
+
+      - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
 
       - name: Run Symfony cache clear (test)
