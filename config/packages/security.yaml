@@ -39,7 +39,10 @@ security:
         # ========================================
         # ÖFFENTLICHE ROUTEN (Keine Authentifizierung)
         # ========================================
-        
+
+        # Swagger-UI und Doku ohne Authentifizierung
+        - { path: ^/api/doc, roles: PUBLIC_ACCESS }
+
         # Auth-Endpunkte
         - { path: ^/api/login$, roles: PUBLIC_ACCESS }
         - { path: ^/api/register$, roles: PUBLIC_ACCESS, methods: [POST] }
@@ -66,7 +69,9 @@ security:
         # ========================================
         # GESCHÜTZTE ROUTEN (Authentifizierung erforderlich)
         # ========================================
-        
+        # Passwortd ändern für authentifizierte Benutzer
+        - { path: ^/api/password/change, roles: IS_AUTHENTICATED_FULLY }
+
         # Posts: Schreib-, Update- und Löschzugriff
         - { path: ^/api/posts$, roles: IS_AUTHENTICATED_FULLY, methods: [POST] }
         - { path: ^/api/posts/\d+$, roles: IS_AUTHENTICATED_FULLY, methods: [PUT, PATCH, DELETE] }

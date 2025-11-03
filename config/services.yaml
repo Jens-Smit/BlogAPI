@@ -1,20 +1,18 @@
-# This file is the entry point to configure your own services.
-# Files in the packages/ subdirectory configure your dependencies.
+# Diese Datei ist der Einstiegspunkt für deine Service-Konfiguration
+# Dateien im packages/ Unterverzeichnis konfigurieren deine Abhängigkeiten
 
-# Put parameters here that don't need to change on each machine where the app is deployed
-# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
-    app.upload_directory: '%kernel.project_dir%/public/uploads' # Or your desired upload path
+    app.upload_directory: '%kernel.project_dir%/public/uploads'
     app.api_url: 'http://127.0.0.1:8000'
+
 services:
-
-    # default configuration for services in *this* file
+    # Standardkonfiguration für Services in dieser Datei
     _defaults:
-        autowire: true      # Automatically injects dependencies in your services.
-        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
-
-    # makes classes in src/ available to be used as services
-    # this creates a service per class whose id is the fully-qualified class name
+        autowire: true
+        autoconfigure: true
+        bind:
+            $appEnv: '%kernel.environment%'
+    
     App\:
         resource: '../src/'
         exclude:
@@ -22,18 +20,21 @@ services:
             - '../src/Entity/'
             - '../src/Kernel.php'
             - '../tests/'
+
     App\Controller\:
         resource: '../src/Controller'
         tags: ['controller.service_arguments']
-    # add more service definitions when explicit configuration is needed
-    # please note that last definitions always *replace* previous ones
+
+
+
     App\Service\PostService:
         arguments:
             $em: '@Doctrine\ORM\EntityManagerInterface'
             $projectDir: '%kernel.project_dir%'
             $uploadDirectory: '%app.upload_directory%'
             $slugger: '@slugger'
-            $apiUrl: '%env(API_URL)%' # Hier verknüpfen wir den Parameter
+            $apiUrl: '%env(API_URL)%'
+
     # PasswordService mit konfigurierbarer Frontend-URL
     App\Service\PasswordService:
         arguments:
@@ -49,5 +50,3 @@ services:
         arguments:
             $contactFromEmail: '%env(CONTACT_FROM_EMAIL)%'
             $contactToEmail: '%env(CONTACT_TO_EMAIL)%'
-            
-    

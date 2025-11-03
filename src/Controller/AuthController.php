@@ -19,8 +19,7 @@ use Symfony\Component\HttpFoundation\Cookie;
 use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Doctrine\ORM\EntityManagerInterface;
-
-use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 
 class AuthController extends AbstractController
 {
@@ -33,21 +32,54 @@ class AuthController extends AbstractController
         private readonly RefreshTokenManagerInterface $refreshTokenManager,
         private readonly RefreshTokenGeneratorInterface $refreshTokenGenerator,
         private readonly EntityManagerInterface $em,
-        
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'limiter.login_limiter')]
+        private readonly RateLimiterFactory $loginLimiter,
+        #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'limiter.password_reset_limiter')]
+        private readonly RateLimiterFactory $passwordResetLimiter,
     ) {}
 
     #[Route("/api/login", name: "api_login", methods: ["POST"])]
-    public function login(Request $request,RateLimiterFactoryInterface $loginLimiter): JsonResponse
+    #[OA\Post(
+        path: "/api/login",
+        summary: "Benutzer-Login",
+        description: "Authentifiziert einen Benutzer und gibt Access- und Refresh-Token zurück.",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["email","password"],
+                properties: [
+                    new OA\Property(property: "email", type: "string", format: "email"),
+                    new OA\Property(property: "password", type: "string", format: "password")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Login erfolgreich",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "message", type: "string"),
+                        new OA\Property(property: "user", type: "object",
+                            properties: [
+                                new OA\Property(property: "email", type: "string")
+                            ]
+                        )
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: "Ungültige Anmeldedaten"),
+            new OA\Response(response: 429, description: "Zu viele Login-Versuche")
+        ]
+    )]
+    public function login(Request $request): JsonResponse
     {
-        // ✅ Rate Limiting basierend auf IP-Adresse
-        $limiter = $loginLimiter->create($request->getClientIp());
-        
-        // Prüfen ob Limit erreicht
-        if (false === $limiter->consume(1)->isAccepted()) {
-            return new JsonResponse([
-                'error' => 'Zu viele Login-Versuche. Bitte versuchen Sie es später erneut.'
-            ], 429);
+        $limiter = $this->loginLimiter->create($request->getClientIp());
+        if (!$limiter->consume(1)->isAccepted()) {
+            return new JsonResponse(['error' => 'Zu viele Login-Versuche.'], 429);
         }
+
         $data = json_decode($request->getContent(), true);
         $email = $data['email'] ?? null;
         $password = $data['password'] ?? null;
@@ -56,58 +88,22 @@ class AuthController extends AbstractController
             return new JsonResponse(['error' => 'E-Mail und Passwort sind erforderlich.'], 400);
         }
 
-        // Benutzer laden und Passwort prüfen
         $user = $this->userRepository->findOneBy(['email' => $email]);
         if (!$user || !$this->passwordHasher->isPasswordValid($user, $password)) {
             return new JsonResponse(['error' => 'Ungültige Anmeldedaten.'], 401);
         }
 
-        // 1. ACCESS TOKEN generieren
         $accessToken = $this->jwtManager->create($user);
-        
-        // 2. REFRESH TOKEN generieren
-        // ✅ Verwenden Sie den TTL-Wert aus der Konfiguration
-        $refreshToken = $this->refreshTokenGenerator->createForUserWithTtl(
-            $user,
-            604800 // 7 Tage (muss mit gesdinet config übereinstimmen)
-        );
-        
-        // ✅ WICHTIG: Token in Datenbank speichern!
+        $refreshToken = $this->refreshTokenGenerator->createForUserWithTtl($user, 604800);
         $this->refreshTokenManager->save($refreshToken);
 
-        // 3. HttpOnly Cookie für ACCESS TOKEN
-        $accessTokenCookie = new Cookie(
-            'BEARER',
-            $accessToken,
-            time() + 3600,    // 1 Stunde
-            '/',
-            null,
-            false,            // secure: true in Produktion!
-            true,             // httpOnly
-            false,
-            'lax'
-        );
+        $accessTokenCookie = new Cookie('BEARER', $accessToken, time() + 3600, '/', null, false, true, false, 'lax');
+        $refreshTokenCookie = new Cookie('refresh_token', $refreshToken->getRefreshToken(), time() + 604800, '/', null, false, true, false, 'lax');
 
-        // 4. HttpOnly Cookie für REFRESH TOKEN
-        // ✅ Cookie-Name MUSS 'refresh_token' sein!
-        $refreshTokenCookie = new Cookie(
-            'refresh_token',                      // ✅ WICHTIG: Exakt dieser Name!
-            $refreshToken->getRefreshToken(),     // Der Token-String
-            time() + 604800,                      // 7 Tage
-            '/',
-            null,
-            false,                                // secure: true in Produktion!
-            true,                                 // httpOnly
-            false,
-            'lax'
-        );
-
-        // 5. Response mit beiden Cookies
         $response = new JsonResponse([
             'message' => 'Login erfolgreich.',
             'user' => ['email' => $user->getUserIdentifier()]
         ], 200);
-
         $response->headers->setCookie($accessTokenCookie);
         $response->headers->setCookie($refreshTokenCookie);
 
@@ -115,11 +111,25 @@ class AuthController extends AbstractController
     }
 
     #[Route("/api/logout", name: "api_logout", methods: ["POST"])]
+    #[OA\Post(
+        path: "/api/logout",
+        summary: "Benutzer-Logout",
+        description: "Löscht Access- und Refresh-Token-Cookies.",
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Logout erfolgreich",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "message", type: "string")
+                    ]
+                )
+            )
+        ]
+    )]
     public function logout(Request $request): JsonResponse
     {
-        // Refresh Token aus Cookie holen
         $refreshTokenString = $request->cookies->get('refresh_token');
-        
         if ($refreshTokenString) {
             $refreshToken = $this->refreshTokenManager->get($refreshTokenString);
             if ($refreshToken) {
@@ -128,27 +138,40 @@ class AuthController extends AbstractController
         }
 
         $response = new JsonResponse(['message' => 'Logout erfolgreich.']);
-        
-        // Beide Cookies löschen
-        $response->headers->setCookie(
-            new Cookie('BEARER', '', time() - 3600, '/', null, false, true, false, 'lax')
-        );
-        $response->headers->setCookie(
-            new Cookie('refresh_token', '', time() - 3600, '/', null, false, true, false, 'lax')
-        );
+        $response->headers->setCookie(new Cookie('BEARER', '', time() - 3600, '/', null, false, true, false, 'lax'));
+        $response->headers->setCookie(new Cookie('refresh_token', '', time() - 3600, '/', null, false, true, false, 'lax'));
 
         return $response;
     }
 
     #[Route('/api/register', name: 'user_register', methods: ['POST'])]
+    #[OA\Post(
+        path: "/api/register",
+        summary: "Benutzer registrieren",
+        description: "Registriert einen neuen Benutzer mit E-Mail und Passwort.",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["email","password"],
+                properties: [
+                    new OA\Property(property: "email", type: "string", format: "email"),
+                    new OA\Property(property: "password", type: "string", format: "password")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: "Benutzer erfolgreich registriert"),
+            new OA\Response(response: 400, description: "Fehlerhafte Eingabe"),
+            new OA\Response(response: 500, description: "Serverfehler")
+        ]
+    )]
     public function register(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-
         if (!is_array($data) || !isset($data['email'], $data['password'])) {
             return new JsonResponse(['error' => 'E-Mail und Passwort sind erforderlich.'], 400);
         }
-
         if (strlen($data['password']) < 8) {
             return new JsonResponse(['error' => 'Passwort muss mindestens 8 Zeichen lang sein.'], 400);
         }
@@ -160,44 +183,76 @@ class AuthController extends AbstractController
             return new JsonResponse(['message' => 'Benutzer erfolgreich registriert.'], 201);
         } catch (BadRequestHttpException $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return new JsonResponse(['error' => 'Registrierung fehlgeschlagen'], 500);
         }
     }
 
     #[Route('/api/password/request-reset', name: 'password_request_reset', methods: ['POST'])]
-    public function requestPasswordReset(Request $request,RateLimiterFactoryInterface $passwordResetLimiter): JsonResponse
+    #[OA\Post(
+        path: "/api/password/request-reset",
+        summary: "Passwort-Reset anfordern",
+        description: "Sendet eine E-Mail für das Zurücksetzen des Passworts.",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["email"],
+                properties: [
+                    new OA\Property(property: "email", type: "string", format: "email")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: "Reset-E-Mail versendet"),
+            new OA\Response(response: 429, description: "Zu viele Anfragen")
+        ]
+    )]
+    public function requestPasswordReset(Request $request): JsonResponse
     {
-        // ✅ Rate Limiting für Password Reset
-        $limiter = $passwordResetLimiter->create($request->getClientIp());
-        
+        $limiter = $this->passwordResetLimiter->create($request->getClientIp());
         if (false === $limiter->consume(1)->isAccepted()) {
-            return new JsonResponse([
-                'error' => 'Zu viele Passwort-Reset-Anfragen. Bitte versuchen Sie es später erneut.'
-            ], 429);
+            return new JsonResponse(['error' => 'Zu viele Passwort-Reset-Anfragen. Bitte später erneut.'], 429);
         }
-        $data = json_decode($request->getContent(), true);
 
+        $data = json_decode($request->getContent(), true);
         if (!is_array($data) || !isset($data['email'])) {
             return new JsonResponse(['error' => 'E-Mail ist erforderlich.'], 400);
         }
 
         try {
             $this->passwordService->requestPasswordReset($data['email']);
-        } catch (\Throwable $e) {
-            // Fehler verschleiern aus Sicherheitsgründen
+        } catch (\Throwable) {
         }
 
-        return new JsonResponse([
-            'message' => 'Falls die E-Mail existiert, wurde eine Reset-E-Mail versendet.'
-        ], 200);
+        return new JsonResponse(['message' => 'Falls die E-Mail existiert, wurde eine Reset-E-Mail versendet.'], 200);
     }
 
     #[Route('/api/password/reset', name: 'password_reset', methods: ['POST'])]
+    #[OA\Post(
+        path: "/api/password/reset",
+        summary: "Passwort zurücksetzen",
+        description: "Setzt das Passwort mithilfe des Tokens zurück.",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["token","newPassword"],
+                properties: [
+                    new OA\Property(property: "token", type: "string"),
+                    new OA\Property(property: "newPassword", type: "string")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: "Passwort erfolgreich zurückgesetzt"),
+            new OA\Response(response: 400, description: "Ungültiger Token oder Eingabe"),
+            new OA\Response(response: 500, description: "Serverfehler")
+        ]
+    )]
     public function resetPassword(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-
         if (!is_array($data) || !isset($data['token'], $data['newPassword'])) {
             return new JsonResponse(['error' => 'Token und neues Passwort sind erforderlich.'], 400);
         }
@@ -207,22 +262,42 @@ class AuthController extends AbstractController
             return new JsonResponse(['message' => 'Passwort erfolgreich zurückgesetzt.'], 200);
         } catch (BadRequestHttpException $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return new JsonResponse(['error' => 'Fehler beim Zurücksetzen des Passworts'], 500);
         }
     }
 
     #[Route('/api/password/change', name: 'password_change', methods: ['POST'])]
+    #[OA\Post(
+        path: "/api/password/change",
+        summary: "Passwort ändern",
+        description: "Ändert das Passwort des aktuell angemeldeten Benutzers.",
+        tags: ["Authentication"],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ["currentPassword","newPassword"],
+                properties: [
+                    new OA\Property(property: "currentPassword", type: "string"),
+                    new OA\Property(property: "newPassword", type: "string")
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: "Passwort erfolgreich geändert"),
+            new OA\Response(response: 400, description: "Fehlerhafte Eingabe"),
+            new OA\Response(response: 401, description: "Nicht authentifiziert"),
+            new OA\Response(response: 500, description: "Serverfehler")
+        ]
+    )]
     public function changePassword(Request $request): JsonResponse
     {
         $user = $this->getUser();
-        
         if (!$user) {
             return new JsonResponse(['error' => 'Nicht authentifiziert.'], 401);
         }
 
         $data = json_decode($request->getContent(), true);
-
         if (!is_array($data) || !isset($data['currentPassword'], $data['newPassword'])) {
             return new JsonResponse(['error' => 'Aktuelles und neues Passwort sind erforderlich.'], 400);
         }
@@ -232,7 +307,7 @@ class AuthController extends AbstractController
             return new JsonResponse(['message' => 'Passwort erfolgreich geändert.'], 200);
         } catch (BadRequestHttpException $e) {
             return new JsonResponse(['error' => $e->getMessage()], 400);
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return new JsonResponse(['error' => 'Fehler beim Ändern des Passworts'], 500);
         }
     }
