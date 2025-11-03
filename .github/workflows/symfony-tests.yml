@@ -72,12 +72,12 @@ jobs:
 
       - name: Run Symfony cache clear (test)
         run: php bin/console cache:clear --env=test
-        
+
       - name: create DB (test)
         run: php bin/console doctrine:database:create --env=test --if-not-exists
 
       - name: Run Doctrine migrations (test)
-        run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
-
+        run: php bin/console doctrine:schema:create --env=test
+        
       - name: Run PHPUnit tests
         run: php -d memory_limit=2G vendor/bin/phpunit --testsuite default
