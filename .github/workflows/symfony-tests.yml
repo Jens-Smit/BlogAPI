@@ -78,6 +78,6 @@ jobs:
 
       - name: Run Doctrine migrations (test)
         run: php bin/console doctrine:schema:create --env=test
-        
+
       - name: Run PHPUnit tests
-        run: php -d memory_limit=2G vendor/bin/phpunit --testsuite default
+        run: php -d memory_limit=2G vendor/bin/phpunit tests
