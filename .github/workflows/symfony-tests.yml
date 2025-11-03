@@ -14,29 +14,34 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
+          # IMPORTANT: We use 'test_db' here and in DATABASE_URL
+          MYSQL_DATABASE: test_db
           MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_DATABASE: test_db # Wird überschrieben durch DATABASE_URL
         ports:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=3
+          --health-retries=10 # Increased retries for robustness
 
     env:
-      # WICHTIG: Die Passphrase muss hier gesetzt werden, damit PHPUnit darauf zugreifen kann
-      # Dies sollte ein GitHub Secret sein!
+      # --- FIX 1: Set JWT Paths and Passphrase ---
+      # The paths MUST point to the files created in the 'Create JWT Key Files' step
+      JWT_PRIVATE_KEY_PATH: '%kernel.project_dir%/config/jwt/private.pem'
+      JWT_PUBLIC_KEY_PATH: '%kernel.project_dir%/config/jwt/public.pem'
+      # Passthrough the passphrase secret
       JWT_PASSPHRASE: ${{ secrets.JWT_PASSPHRASE }}
       
-      # Überschreibe DATABASE_URL so, dass sie der lokalen .env.test entspricht
-      DATABASE_URL: "mysql://root:@127.0.0.1:3306/test_blog?serverVersion=8.0"
+      # Überschreibe DATABASE_URL so, dass sie auf den Service verweist
+      # Beachten Sie: Der Datenbankname muss mit dem MYSQL_DATABASE-Wert übereinstimmen
+      DATABASE_URL: "mysql://root:@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4"
       
       # Setze die restlichen Umgebungsvariablen für die Tests
       APP_ENV: test
       APP_SECRET: SomeSecretKey
-      # ... fügen Sie hier weitere notwendige ENV-Variablen hinzu (z.B. MAILER_DSN, CORS_ALLOW_ORIGIN, etc.)
-
+      # ... fügen Sie hier weitere notwendige ENV-Variablen hinzu
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -48,23 +53,14 @@ jobs:
           extensions: mbstring, pdo_mysql, xml
           coverage: none
 
-      # --- START: JWT FIX FÜR CI ---
+      # --- JWT FIX: Create JWT Key Files for Testing ---
       - name: 🔑 Create JWT Key Files for Testing 
-        # Dieser Schritt erstellt die private.pem und public.pem Dateien,
-        # die Ihre JWT_SECRET_KEY und JWT_PUBLIC_KEY ENV-Variablen erwarten.
-        # WICHTIG: Ersetzen Sie secrets.JWT_PRIVATE_KEY_CONTENT und secrets.JWT_PUBLIC_KEY_CONTENT 
-        # durch die tatsächlichen Namen Ihrer GitHub Secrets.
+        # Create the private.pem and public.pem files using GitHub Secrets content
         run: |
           mkdir -p config/jwt
-          
-          # Schreibe den Inhalt der Keys aus den GitHub Secrets in die Dateien
+          # Write the content of the keys from the GitHub Secrets into the files
           echo "${{ secrets.JWT_PRIVATE_KEY_CONTENT }}" > config/jwt/private.pem
           echo "${{ secrets.JWT_PUBLIC_KEY_CONTENT }}" > config/jwt/public.pem
-        env:
-          # Nur zur Klarstellung, welche Secrets verwendet werden
-          JWT_PRIVATE_KEY_CONTENT: ${{ secrets.JWT_PRIVATE_KEY_CONTENT }}
-          JWT_PUBLIC_KEY_CONTENT: ${{ secrets.JWT_PUBLIC_KEY_CONTENT }}
-      # --- END: JWT FIX FÜR CI ---
 
       - name: Ensure migrations directory exists
         run: |
@@ -72,7 +68,7 @@ jobs:
           if [ ! -f migrations/.gitkeep ]; then touch migrations/.gitkeep; fi
           git ls-files --error-unmatch migrations/.gitkeep || echo "migrations/.gitkeep not tracked (ok for CI)"
 
-      - name: Wait for MySQL to be ready and create test_blog DB
+      - name: Wait for MySQL to be ready
         run: |
           # Installation des MySQL-Clients beibehalten, da er für 'mysqladmin ping' notwendig ist
           sudo apt-get update -y
@@ -80,12 +76,10 @@ jobs:
           
           # Warte auf MySQL
           for i in {1..30}; do
-            mysqladmin ping -h 127.0.0.1 -P 3306 --silent && break
+            mysqladmin ping -h 127.0.0.1 -P 3306 -u root --silent && break
             echo "Waiting for mysql..."
             sleep 2
           done
-          # Erstelle die Datenbank, die in DATABASE_URL verwendet wird
-          mysql -h 127.0.0.1 -P 3306 -u root -e "CREATE DATABASE IF NOT EXISTS test_blog CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
       - name: Copy .env.test.local
         run: php -r "file_exists('.env.test.local') || copy('.env.test', '.env.test.local');"
@@ -104,15 +98,14 @@ jobs:
       - name: Run Symfony cache clear (test)
         run: php bin/console cache:clear --env=test
 
-      - name: create DB (test)
-        run: php bin/console doctrine:database:create --env=test --if-not-exists
+      # FIX 2: We don't need to explicitly create the DB here, as 'doctrine:schema:create' can do it,
+      # and it's already set in the 'services' block via MYSQL_DATABASE: test_db
+      # Using the existing 'doctrine:schema:create' as the primary setup step.
       
-      # Der Schritt unten erstellt das Schema basierend auf den Entitäten, 
-      # was für Tests oft besser ist als Migrations.
       - name: Run Doctrine schema creation (test)
+        # This will automatically create the database if it doesn't exist and create the schema.
         run: php bin/console doctrine:schema:create --env=test
 
-      # --- LETZTER SCHRITT: TESTS AUSFÜHREN ---
+      # --- LAST STEP: RUN TESTS ---
       - name: Run PHPUnit tests
-        # APP_ENV=test muss gesetzt sein, damit die korrekten Konfigurationen (inkl. JWT) geladen werden
         run: php -d memory_limit=2G vendor/bin/phpunit tests
