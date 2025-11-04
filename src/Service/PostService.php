@@ -34,7 +34,15 @@ class PostService
         $this->slugger = $slugger;
         $this->apiUrl = $apiUrl;
     }
-
+    private function sanitizeContent(string $content): string
+    {
+        $config = \HTMLPurifier_Config::createDefault();
+        $config->set('HTML.Allowed', 'p,br,strong,em,u,a[href],img[src|alt],h2,h3,ul,ol,li');
+        $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true]);
+        
+        $purifier = new \HTMLPurifier($config);
+        return $purifier->purify($content);
+    }
     public function createPost(PostCreateDTO $dto, User $author): Post
     {
         // Validierung: Titelbild ist erforderlich
@@ -80,7 +88,7 @@ class PostService
             }
         }
         
-        $finalContent = $dto->content ?? '';
+        $finalContent = $this->sanitizeContent($dto->content ?? '');
 
         // Dekodieren der imageMap
         $imageMap = json_decode($dto->imageMap ?? '{}', true) ?? [];

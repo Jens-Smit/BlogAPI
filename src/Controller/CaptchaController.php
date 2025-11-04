@@ -53,12 +53,52 @@ class CaptchaController extends AbstractController
             )
         ]
     )]
+    
+    #[OA\Get(
+        path: "/api/captcha/generate",
+        summary: "Neues CAPTCHA generieren",
+        description: "Generiert ein neues CAPTCHA, speichert die Initialrotationen in der Session und liefert die Bildteile sowie die Startrotationen zurück.",
+        tags: ["Captcha"],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "CAPTCHA erfolgreich generiert",
+                content: new OA\JsonContent(
+                    type: "object",
+                    properties: [
+                        new OA\Property(property: "captchaId", type: "string", example: "captcha_64c3f88a9c43d"),
+                        new OA\Property(
+                            property: "imageParts",
+                            type: "array",
+                            items: new OA\Items(type: "string", format: "uri"),
+                            example: ["https://example.test/captcha/part1.png", "https://example.test/captcha/part2.png", "https://example.test/captcha/part3.png", "https://example.test/captcha/part4.png"]
+                        ),
+                        new OA\Property(
+                            property: "initialRotations",
+                            type: "array",
+                            items: new OA\Items(type: "integer", example: 90),
+                            example: [90, 180, 270, 0]
+                        )
+                    ]
+                )
+            )
+        ]
+    )]
+
+
+    #[Route('/api/captcha/generate', name: 'api_captcha_generate', methods: ['GET'])]
     public function generateCaptcha(SessionInterface $session): JsonResponse
     {
         $captchaData = $this->captchaGeneratorService->generateCaptchaImages();
 
         $captchaId = uniqid('captcha_');
-        $session->set('captcha_initial_rotations_' . $captchaId, $captchaData['initialRotations']);
+
+        // Einheitliche Session-Entry: single source of truth
+        $session->set('captcha_' . $captchaId, [
+            'initialRotations' => $captchaData['initialRotations'],
+            'timestamp' => (new \DateTimeImmutable())->getTimestamp(),
+            'attempts' => 0,
+        ]);
 
         return new JsonResponse([
             'captchaId' => $captchaId,
@@ -124,20 +164,45 @@ class CaptchaController extends AbstractController
             return new JsonResponse(['success' => false, 'message' => 'CAPTCHA ID fehlt.'], Response::HTTP_BAD_REQUEST);
         }
 
-        $initialRotations = $session->get('captcha_initial_rotations_' . $captchaId);
+        $sessionKey = 'captcha_' . $captchaId;
+        $captchaData = $session->get($sessionKey);
 
-        if (!$initialRotations) {
+        // Kein Captcha oder ungültiges Format
+        if (!is_array($captchaData)
+            || !isset($captchaData['initialRotations'], $captchaData['timestamp'], $captchaData['attempts'])
+        ) {
             return new JsonResponse(['success' => false, 'message' => 'CAPTCHA nicht gefunden oder abgelaufen.'], Response::HTTP_BAD_REQUEST);
         }
 
-        if (count($userClicks) !== count($initialRotations) || count($initialRotations) !== $this->captchaGeneratorService::NUM_PARTS) { 
+        // TTL prüfen (5 Minuten = 300s)
+        $now = time();
+        if (($now - (int)$captchaData['timestamp']) > 300) {
+            $session->remove($sessionKey);
+            return new JsonResponse(['success' => false, 'message' => 'CAPTCHA abgelaufen'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Rate-Limiting (max 3 Versuche)
+        if ((int)$captchaData['attempts'] >= 3) {
+            $session->remove($sessionKey);
+            return new JsonResponse(['success' => false, 'message' => 'Zu viele Versuche'], 429);
+        }
+
+        // Inkrementiere Versuche
+        $captchaData['attempts'] = (int)$captchaData['attempts'] + 1;
+        $session->set($sessionKey, $captchaData);
+
+        $initialRotations = $captchaData['initialRotations'];
+
+        // Validierung der Anzahl Teile
+        if (!is_array($userClicks) || count($userClicks) !== count($initialRotations) || count($initialRotations) !== $this->captchaGeneratorService::NUM_PARTS) {
             return new JsonResponse(['success' => false, 'message' => 'Ungültige Anzahl von CAPTCHA-Teilen.'], Response::HTTP_BAD_REQUEST);
         }
 
+        // Prüfe jede Rotation; ROTATION_STEP als positive integer definieren in Service
         $isCorrect = true;
         foreach ($userClicks as $index => $clicks) {
-            $initialAngle = $initialRotations[$index];
-            $rotationByClicks = $clicks * -$this->captchaGeneratorService::ROTATION_STEP;
+            $initialAngle = (int)$initialRotations[$index];
+            $rotationByClicks = (int)$clicks * -$this->captchaGeneratorService::ROTATION_STEP;
 
             $finalRotation = ($initialAngle + $rotationByClicks) % 360;
             if ($finalRotation < 0) {
@@ -150,12 +215,14 @@ class CaptchaController extends AbstractController
             }
         }
 
-        $session->remove('captcha_initial_rotations_' . $captchaId);
+        // Bei Erfolg oder nach maximalen Versuchen entfernen
+        $session->remove($sessionKey);
 
         if ($isCorrect) {
-            return new JsonResponse(['success' => true, 'message' => 'CAPTCHA erfolgreich gelöst.']);
-        } else {
-            return new JsonResponse(['success' => false, 'message' => 'Falsche CAPTCHA-Lösung. Bitte versuchen Sie es erneut.'], Response::HTTP_BAD_REQUEST);
+            return new JsonResponse(['success' => true, 'message' => 'CAPTCHA erfolgreich gelöst.'], Response::HTTP_OK);
         }
+
+        // Falsche Lösung
+        return new JsonResponse(['success' => false, 'message' => 'Falsche CAPTCHA-Lösung. Bitte versuchen Sie es erneut.'], Response::HTTP_BAD_REQUEST);
     }
 }

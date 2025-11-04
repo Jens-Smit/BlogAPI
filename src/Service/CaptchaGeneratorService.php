@@ -150,9 +150,14 @@ class CaptchaGeneratorService
             imagedestroy($partImage);
         }
 
-        return [
+        
+        $captchaData = [
             'imageParts' => $imageParts,
             'initialRotations' => $initialRotations,
+            'timestamp' => time(),  // ✅ Zeitstempel hinzufügen
+            'attempts' => 0         // ✅ Versuchs-Counter
         ];
+        
+        return $captchaData;
     }
 }
