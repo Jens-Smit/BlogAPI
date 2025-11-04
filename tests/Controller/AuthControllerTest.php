@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Tests\Controller;
 
 use App\Entity\User;
@@ -105,32 +104,27 @@ class AuthControllerTest extends WebTestCase
 
         $response = $this->client->getResponse();
         
-        // Sicherstellen, dass der Login erfolgreich war, bevor wir weitermachen
+        // Sicherstellen, dass der Login erfolgreich war
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), 
             'Der Login-Helper ist fehlgeschlagen: ' . $response->getContent()
         );
         
-        // --- KORREKTUR: MANUELLE INJEKTION DES COOKIES IN DEN COOKIEJAR ---
-        // Dies ist notwendig, da der Client in der Testumgebung Schwierigkeiten 
-        // mit HttpOnly/Secure-Cookies haben kann (insbesondere Domain/Path/Secure-Kombinationen).
-        
+        // Cookie manuell in CookieJar injizieren
         $setCookieHeaders = $response->headers->all('Set-Cookie');
 
         if (!empty($setCookieHeaders)) {
             foreach ($setCookieHeaders as $header) {
-                // Konvertiere den Header-String in ein HttpFoundationCookie-Objekt
                 $httpFoundationCookie = HttpFoundationCookie::fromString($header);
                 
                 if ($httpFoundationCookie->getName() === 'BEARER') {
                     $domain = $httpFoundationCookie->getDomain() ?: $this->client->getRequest()->getHost();
-                    // Der Pfad sollte '/' sein, da der Controller keinen expliziten Pfad gesetzt hat (standardmäßig '/' für Cookie auf localhost)
-                    $path = $httpFoundationCookie->getPath() ?: '/'; // FIX: Pfad auf '/' setzen, falls leer
+                    $path = $httpFoundationCookie->getPath() ?: '/';
 
                     $browserKitCookie = new Cookie(
                         $httpFoundationCookie->getName(),
                         $httpFoundationCookie->getValue(),
                         $httpFoundationCookie->getExpiresTime(),
-                        $path, // Verwende den korrigierten Pfad
+                        $path,
                         $domain,
                         $httpFoundationCookie->isSecure(),
                         $httpFoundationCookie->isHttpOnly(),
@@ -142,7 +136,6 @@ class AuthControllerTest extends WebTestCase
                 }
             }
         }
-        // --- ENDE KORREKTUR ---
     }
 
     /**

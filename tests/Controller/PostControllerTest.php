@@ -27,7 +27,25 @@ class PostControllerTest extends WebTestCase
         $this->em->createQuery('DELETE FROM App\Entity\Category c')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\User u')->execute();
     }
+    private function createMockUploadedFile(string $filename = 'test.png', string $mimeType = 'image/png'): UploadedFile
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'test_');
+        
+        // ✅ Erstelle echte PNG-Datei (1x1 Pixel transparentes PNG)
+        $pngData = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        file_put_contents($tmpFile, $pngData);
+        
+        // Temporäre Datei merken für Cleanup
+        $this->tmpFiles[] = $tmpFile;
 
+        return new UploadedFile(
+            $tmpFile,
+            $filename,
+            $mimeType,
+            null,
+            true  // test mode
+        );
+    }
     protected function tearDown(): void
     {
         if ($this->em && $this->em->isOpen()) {
@@ -79,6 +97,7 @@ class PostControllerTest extends WebTestCase
         $post1->setTitle('Post A');
         $post1->setContent('Content A');
         $post1->setAuthor($user);
+        $post1->setSlug('test-post_A');
         $post1->setCategory($category);
         $post1->setCreatedAt(new \DateTime());
         $this->em->persist($post1);
@@ -86,6 +105,7 @@ class PostControllerTest extends WebTestCase
         $post2 = new Post();
         $post2->setTitle('Post B');
         $post2->setContent('Content B');
+        $post2->setSlug('test-post-B');
         $post2->setAuthor($user);
         $post2->setCategory($category);
         $post2->setCreatedAt(new \DateTime());
@@ -111,6 +131,7 @@ class PostControllerTest extends WebTestCase
 
         $post1 = new Post();
         $post1->setTitle('Post in Category 1');
+        $post1->setSlug('post-in-category-1');
         $post1->setContent('Content');
         $post1->setAuthor($user);
         $post1->setCategory($category1);
@@ -119,6 +140,7 @@ class PostControllerTest extends WebTestCase
 
         $post2 = new Post();
         $post2->setTitle('Post in Category 2');
+        $post2->setSlug('post-in-category-2');
         $post2->setContent('Content');
         $post2->setAuthor($user);
         $post2->setCategory($category2);
@@ -137,7 +159,26 @@ class PostControllerTest extends WebTestCase
         $this->assertCount(1, $decoded);
         $this->assertEquals('Post in Category 1', $decoded[0]['title']);
     }
-
+    private function createRealImageFile(string $type = 'png'): string
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'test_img_');
+        
+        if ($type === 'png') {
+            // 1x1 Pixel transparentes PNG (kleinste gültige PNG-Datei)
+            $imageData = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        } elseif ($type === 'jpg' || $type === 'jpeg') {
+            // 1x1 Pixel JPEG
+            $imageData = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDAREAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A');
+        } elseif ($type === 'gif') {
+            // 1x1 Pixel GIF
+            $imageData = base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+        } else {
+            throw new \InvalidArgumentException("Unsupported image type: $type");
+        }
+        
+        file_put_contents($tmp, $imageData);
+        return $tmp;
+    }
     public function testGetPostByIdReturnsPost(): void
     {
         $user = $this->createAndPersistUser();
@@ -145,14 +186,16 @@ class PostControllerTest extends WebTestCase
 
         $post = new Post();
         $post->setTitle('Single Post');
+        $post->setSlug('single-post');
         $post->setContent('Single Content');
         $post->setAuthor($user);
         $post->setCategory($category);
         $post->setCreatedAt(new \DateTime());
         $this->em->persist($post);
         $this->em->flush();
-
-        $this->client->request('GET', '/api/posts/' . $post->getId());
+         // ✅ FIX: User einloggen
+        $this->client->loginUser($user);
+        $this->client->request('GET', '/api/posts/' . $post->getSlug());
 
         $this->assertResponseIsSuccessful();
 
@@ -178,8 +221,7 @@ class PostControllerTest extends WebTestCase
         
         $this->client->loginUser($user);
 
-        $tmp = tempnam(sys_get_temp_dir(), 'upl');
-        file_put_contents($tmp, 'dummy image content');
+        $tmp = $this->createRealImageFile('png');
         $uploaded = new UploadedFile(
             $tmp,
             'title.png',
@@ -191,6 +233,7 @@ class PostControllerTest extends WebTestCase
         $parameters = [
             'title' => 'Neuer Test Post',
             'content' => 'Ein Inhalt für den Test',
+            'slug' => 'neuer-test-post',
             'imageMap' => '{}',
             'categoryId' => $category->getId()
         ];
@@ -279,6 +322,7 @@ class PostControllerTest extends WebTestCase
 
         $post = new Post();
         $post->setTitle('Original Title');
+        $post->setSlug('original-title'); 
         $post->setContent('Original Content');
         $post->setAuthor($user);
         $post->setCategory($category1);
@@ -321,6 +365,7 @@ class PostControllerTest extends WebTestCase
 
         $post = new Post();
         $post->setTitle('Original Title');
+        $post->setSlug('original-title'); 
         $post->setContent('Original Content');
         $post->setAuthor($user);
         $post->setCategory($category);
@@ -353,6 +398,7 @@ class PostControllerTest extends WebTestCase
 
         $post = new Post();
         $post->setTitle('Original Title');
+        $post->setSlug('original-title');
         $post->setContent('Original Content');
         $post->setAuthor($user1);
         $post->setCategory($category);
@@ -407,6 +453,7 @@ class PostControllerTest extends WebTestCase
         $post->setTitle('Zu löschender Post');
         $post->setContent('...content...');
         $post->setAuthor($user);
+        $post->setSlug('zu-loschender-post');
         $post->setCategory($category);
         $post->setCreatedAt(new \DateTime());
         $this->em->persist($post);
@@ -433,6 +480,7 @@ class PostControllerTest extends WebTestCase
 
         $post = new Post();
         $post->setTitle('Post von User1');
+        $post->setSlug('post-von-user1'); 
         $post->setContent('Content');
         $post->setAuthor($user1);
         $post->setCategory($category);
@@ -517,24 +565,23 @@ class PostControllerTest extends WebTestCase
         
         $this->client->loginUser($user);
 
-        $tmpTitle = tempnam(sys_get_temp_dir(), 'title');
-        file_put_contents($tmpTitle, 'title image');
+        // ✅ FIX: Verwende createRealImageFile für ALLE Bilder
+        $tmpTitle = $this->createRealImageFile('png');
         $titleImage = new UploadedFile($tmpTitle, 'title.png', 'image/png', null, true);
 
-        $tmpImg1 = tempnam(sys_get_temp_dir(), 'img1');
-        file_put_contents($tmpImg1, 'image 1');
+        $tmpImg1 = $this->createRealImageFile('jpeg');  // ✅ GEÄNDERT
         $image1 = new UploadedFile($tmpImg1, 'image1.jpg', 'image/jpeg', null, true);
 
-        $tmpImg2 = tempnam(sys_get_temp_dir(), 'img2');
-        file_put_contents($tmpImg2, 'image 2');
-        $image2 = new UploadedFile($tmpImg2, 'image2.gif', 'image/gif', null, true);
+        $tmpImg2 = $this->createRealImageFile('png');  // ✅ GEÄNDERT von GIF zu PNG
+        $image2 = new UploadedFile($tmpImg2, 'image2.png', 'image/png', null, true);  // ✅ Extension geändert
 
         $parameters = [
             'title' => 'Post mit mehreren Bildern',
             'content' => 'Text mit [img1] und [img2]',
+            'slug' => 'post-mit-mehreren-bildern',
             'imageMap' => json_encode([
                 'img1' => 'image1.jpg',
-                'img2' => 'image2.gif'
+                'img2' => 'image2.png'  // ✅ GEÄNDERT von .gif zu .png
             ]),
             'categoryId' => $category->getId()
         ];

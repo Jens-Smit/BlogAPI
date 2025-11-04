@@ -487,6 +487,7 @@ class CategoryControllerTest extends WebTestCase
 
         $post = new Post();
         $post->setTitle('Post');
+        $post->setSlug('test-post');
         $post->setContent('Content');
         $post->setAuthor($user);
         $post->setCategory($category);
@@ -520,6 +521,7 @@ class CategoryControllerTest extends WebTestCase
         $post = new Post();
         $post->setTitle('Post');
         $post->setContent('Content');
+        $post->setSlug('test-post');
         $post->setAuthor($user);
         $post->setCategory($parent);
         $post->setCreatedAt(new \DateTime());

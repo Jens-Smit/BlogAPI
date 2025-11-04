@@ -45,6 +45,21 @@ class Post
     #[ORM\JoinColumn(nullable: false)]
     private ?Category $category = null;
 
+    #[ORM\Column(length: 255, unique: true)]
+    #[Groups("post")]
+    private ?string $slug = null;
+    
+    public function getSlug(): ?string
+    {
+        return $this->slug;
+    }
+
+    public function setSlug(string $slug): static
+    {
+        $this->slug = $slug;
+        return $this;
+    }
+
     public function getId(): ?int
     {
         return $this->id;

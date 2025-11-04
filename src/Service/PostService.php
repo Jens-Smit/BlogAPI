@@ -50,8 +50,13 @@ class PostService
                 throw new \InvalidArgumentException("Kategorie mit ID {$dto->categoryId} nicht gefunden.");
             }
         }
-
+        $slug = strtolower($this->slugger->slug($dto->title));
+        $existing = $this->em->getRepository(Post::class)->findOneBy(['slug' => $slug]);
+        if ($existing) {
+            $slug .= '-' . uniqid();
+        }
         $post = new Post();
+        $post->setSlug($slug);
         $post->setTitle($dto->title);
         $post->setAuthor($author);
         $post->setCreatedAt(new \DateTime());
@@ -113,6 +118,8 @@ class PostService
         // Aktualisiere Titel
         if ($dto->title !== null) {
             $post->setTitle($dto->title);
+            $newSlug = strtolower($this->slugger->slug($dto->title));
+            $post->setSlug($newSlug);
         }
         
         // Aktualisiere Content
@@ -159,35 +166,65 @@ class PostService
      * Lädt eine Datei hoch und gibt den neuen Dateinamen zurück
      */
     private function uploadFile(UploadedFile $file): string
-{
-    $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
-    $safeFilename = $this->slugger->slug($originalFilename);
-
-    // Endung bestimmen
-    $extension = $file->guessExtension();
-    if (!$extension || $extension === 'txt') {
-        $extension = pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION);
-    }
-
-    $newFilename = $safeFilename . '-' . uniqid() . '.' . $extension;
-
-    try {
+    {
+        // ✅ MIME-Type Whitelist
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!in_array($file->getMimeType(), $allowedMimes)) {
+            throw new \RuntimeException('Invalid file type');
+        }
+        
+        // ✅ Größenlimit (5MB)
+        if ($file->getSize() > 5242880) {
+            throw new \RuntimeException('File too large');
+        }
+        
+        // ✅ Validiere echten Content-Type (nicht nur Extension)
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $realMime = finfo_file($finfo, $file->getRealPath());
+        finfo_close($finfo);
+        
+        if ($realMime !== $file->getMimeType()) {
+            throw new \RuntimeException('File content mismatch');
+        }
+        
+        // ✅ Sichere Extension-Mapping
+        $extension = match($file->getMimeType()) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            default => throw new \RuntimeException('Unsupported type')
+        };
+        
+        $safeFilename = $this->slugger->slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+        $newFilename = $safeFilename . '-' . bin2hex(random_bytes(8)) . '.' . $extension;
+        
         $file->move($this->uploadDirectory, $newFilename);
-    } catch (FileException $e) {
-        throw new \RuntimeException('Fehler beim Hochladen der Datei: ' . $e->getMessage());
+        
+        // ✅ Setze restriktive Permissions
+        chmod($this->uploadDirectory . '/' . $newFilename, 0644);
+        
+        return $newFilename;
     }
-
-    return $newFilename;
-}
 
     /**
      * Löscht eine Datei aus dem Upload-Verzeichnis
      */
     private function deleteFile(string $filename): void
     {
-        $filePath = $this->uploadDirectory . '/' . $filename;
-        if (file_exists($filePath)) {
-            @unlink($filePath);
+        // ✅ SICHER: Filename validieren
+        if (preg_match('/[^a-zA-Z0-9._-]/', $filename)) {
+            throw new \InvalidArgumentException('Invalid filename');
         }
+        
+        $filePath = realpath($this->uploadDirectory . '/' . $filename);
+        
+        // Stelle sicher, dass Pfad im Upload-Dir liegt
+        if ($filePath === false || 
+            strpos($filePath, realpath($this->uploadDirectory)) !== 0) {
+            throw new \RuntimeException('Invalid file path');
+        }
+        
+        @unlink($filePath);
     }
 }

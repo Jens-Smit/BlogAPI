@@ -63,39 +63,35 @@ class PostController extends AbstractController
         return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
-    #[Route('/api/posts/{id}', name: 'get_post_by_id', methods: ['GET'])]
+    #[Route('/api/posts/{slug}', name: 'get_post_by_id', methods: ['GET'])]
     #[OA\Get(
-        path: "/api/posts/{id}",
-        summary: "Einen einzelnen Blogpost nach ID abrufen",
+        path: "/api/posts/{slug}",
+        summary: "Einen Blogpost per Slug abrufen",
         tags: ["Posts"],
         parameters: [
             new OA\Parameter(
-                name: "id",
+                name: "slug",
                 in: "path",
-                description: "ID des Blogposts",
+                description: "Slug des Blogposts",
                 required: true,
-                schema: new OA\Schema(type: "integer")
+                schema: new OA\Schema(type: "string")
             )
         ],
         responses: [
-            new OA\Response(
-                response: 200,
-                description: "Details des Blogposts",
-                content: new OA\JsonContent(ref: Post::class) // Referenziert die Entity-Klasse
-            ),
+            new OA\Response(response: 200, description: "Details des Blogposts", content: new OA\JsonContent(ref: Post::class)),
             new OA\Response(response: 404, description: "Post nicht gefunden")
         ]
     )]
-    public function getPostById(int $id, EntityManagerInterface $em, SerializerInterface $serializer): JsonResponse
+    public function getPostBySlug(string $slug, EntityManagerInterface $em, SerializerInterface $serializer): JsonResponse
     {
-        $post = $em->getRepository(Post::class)->find($id);
+        $post = $em->getRepository(Post::class)->findOneBy(['slug' => $slug]);
 
         if (!$post) {
-            return new JsonResponse(['error' => 'Post nicht gefunden'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => 'Post nicht gefunden'], 404);
         }
 
         $json = $serializer->serialize($post, 'json', ['groups' => 'post']);
-        return new JsonResponse($json, Response::HTTP_OK, [], true);
+        return new JsonResponse($json, 200, [], true);
     }
 
     #[Route('/api/posts', name: 'create_post', methods: ['POST'])]

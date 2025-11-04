@@ -1,5 +1,7 @@
 <?php
 
+// src/Controller/AuthController.php
+
 namespace App\Controller;
 
 use OpenApi\Attributes as OA;
@@ -115,6 +117,7 @@ class AuthController extends AbstractController
         path: "/api/logout",
         summary: "Benutzer-Logout",
         description: "Löscht Access- und Refresh-Token-Cookies.",
+        tags: ["Authentication"],
         responses: [
             new OA\Response(
                 response: 200,

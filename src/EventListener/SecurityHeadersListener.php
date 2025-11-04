@@ -48,9 +48,9 @@ class SecurityHeadersListener implements EventSubscriberInterface
         // Verhindert XSS durch Limiting von Script-Sources
         $response->headers->set(
             'Content-Security-Policy',
-            "default-src 'self'; " .
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " .
-            "style-src 'self' 'unsafe-inline'; " .
+            "default-src 'none'; " .
+            "script-src 'self'; " .  // KEIN unsafe-inline!
+            "style-src 'self'; " .
             "img-src 'self' data: https:; " .
             "font-src 'self'; " .
             "connect-src 'self'; " .

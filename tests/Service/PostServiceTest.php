@@ -70,17 +70,42 @@ class PostServiceTest extends TestCase
         }
     }
 
-    private function createMockUploadedFile(string $filename = 'test.gif', string $content = 'dummy'): UploadedFile
+    private function createMockUploadedFile(string $filename = 'test.png', string $content = null): UploadedFile
     {
         $extension = pathinfo($filename, PATHINFO_EXTENSION);
-        $tmpFile = tempnam(sys_get_temp_dir(), 'test_') . '.' . $extension;
+        $tmpFile = tempnam(sys_get_temp_dir(), 'test_');
+        
+        // ✅ FIX: Verwende echte Bild-Daten basierend auf Extension
+        if ($content === null) {
+            if ($extension === 'png') {
+                // 1x1 Pixel transparentes PNG
+                $content = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+            } elseif (in_array($extension, ['jpg', 'jpeg'])) {
+                // 1x1 Pixel JPEG
+                $content = base64_decode('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDAREAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/8A');
+            } elseif ($extension === 'gif') {
+                // 1x1 Pixel GIF
+                $content = base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+            } else {
+                $content = 'dummy image content';
+            }
+        }
+        
         file_put_contents($tmpFile, $content);
         $this->tmpFiles[] = $tmpFile;
+
+        // Bestimme MIME-Type basierend auf Extension
+        $mimeType = match($extension) {
+            'png' => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            default => 'image/png'
+        };
 
         return new UploadedFile(
             $tmpFile,
             $filename,
-            'image/gif',
+            $mimeType,
             null,
             true
         );
@@ -89,7 +114,7 @@ class PostServiceTest extends TestCase
 
     public function testCreatePostSuccessful(): void
     {
-        $uploadedFile = $this->createMockUploadedFile('test_image.gif');
+        $uploadedFile = $this->createMockUploadedFile('test_image.png');
         
         $persistedPost = null;
         $this->em->expects($this->once())
@@ -106,7 +131,7 @@ class PostServiceTest extends TestCase
             'Content with image [image-placeholder]',
             $uploadedFile,
             [],
-            json_encode(['image-placeholder' => 'test_image.gif'])
+            json_encode(['image-placeholder' => 'test_image.png'])
         );
         
         $author = new User();
@@ -119,7 +144,7 @@ class PostServiceTest extends TestCase
         
         $titleImageFilename = $persistedPost->getTitleImage();
         $this->assertNotNull($titleImageFilename);
-        $this->assertStringEndsWith('.gif', $titleImageFilename);
+        $this->assertStringEndsWith('.png', $titleImageFilename);
         
         // Prüfe, ob Platzhalter ersetzt wurde
         $content = $persistedPost->getContent();
@@ -130,22 +155,36 @@ class PostServiceTest extends TestCase
 
     public function testCreatePostWithCategory(): void
     {
-        $uploadedFile = $this->createMockUploadedFile('test.gif');
+        $uploadedFile = $this->createMockUploadedFile('test.png');
         
         $category = new Category();
         $category->setName('Test Category');
         
-        // FIX: Mocken des konkreten CategoryRepository
         $categoryRepo = $this->createMock(CategoryRepository::class);
         $categoryRepo->expects($this->once())
             ->method('find')
             ->with(1)
             ->willReturn($category);
         
-        $this->em->expects($this->once())
+        // ✅ FIX: Mock für Post-Repository mit EXAKTEM Slug
+        $postRepo = $this->createMock(\Doctrine\ORM\EntityRepository::class);
+        $postRepo->expects($this->once())
+            ->method('findOneBy')
+            ->with(['slug' => 'test-title'])  // ✅ GEÄNDERT: Exakter Slug statt $this->anything()
+            ->willReturn(null);
+        
+        // ✅ FIX: Beide Repositories mocken
+        $this->em->expects($this->exactly(2))
             ->method('getRepository')
-            ->with(Category::class)
-            ->willReturn($categoryRepo);
+            ->willReturnCallback(function($entityClass) use ($categoryRepo, $postRepo) {
+                if ($entityClass === Category::class) {
+                    return $categoryRepo;
+                }
+                if ($entityClass === Post::class) {
+                    return $postRepo;
+                }
+                throw new \RuntimeException("Unexpected repository request for: $entityClass");
+            });
         
         $persistedPost = null;
         $this->em->expects($this->once())

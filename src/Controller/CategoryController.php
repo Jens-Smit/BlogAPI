@@ -8,6 +8,7 @@ use OpenApi\Attributes as OA;
 use App\DTO\CategoryCreateDTO;
 use App\DTO\CategoryUpdateDTO;
 use App\Entity\Category;
+use App\Entity\Post;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -528,8 +529,11 @@ class CategoryController extends AbstractController
         }
 
         // 3) Lösche alle Posts, die zu diesen Kategorien gehören (Bulk-Delete)
-        $em->createQuery('DELETE FROM App\Entity\Post p WHERE p.category IN (:ids)')
-            ->setParameter('ids', $order)
+        $qb = $em->createQueryBuilder();
+            $qb->delete(Post::class, 'p')
+            ->where($qb->expr()->in('p.category', ':ids'))
+            ->setParameter('ids', array_map('intval', $order)) // Type-cast!
+            ->getQuery()
             ->execute();
 
         // 4) Entferne Kategorien in Post-Order (Kinder zuerst)
