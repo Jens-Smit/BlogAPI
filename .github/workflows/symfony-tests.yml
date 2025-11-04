@@ -1,111 +1,60 @@
-name: Run Symfony Tests
 
+name: CI & Deploy
 on:
   push:
-    branches: ["master"]
-  pull_request:
-    branches: ["master"]
-
+    branches:
+      - master
 jobs:
-  symfony-tests:
+  test-and-deploy:
     runs-on: ubuntu-latest
-
     services:
       mysql:
         image: mysql:8.0
         env:
-          # IMPORTANT: We use 'test_db' here and in DATABASE_URL
-          MYSQL_DATABASE: test_db
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_blog
         ports:
           - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping --silent"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=10 # Increased retries for robustness
-
-    env:
-      # --- FIX 1: Set JWT Paths and Passphrase ---
-      # The paths MUST point to the files created in the 'Create JWT Key Files' step
-      JWT_PRIVATE_KEY_PATH: '%kernel.project_dir%/config/jwt/private.pem'
-      JWT_PUBLIC_KEY_PATH: '%kernel.project_dir%/config/jwt/public.pem'
-      # Passthrough the passphrase secret
-      JWT_PASSPHRASE: ${{ secrets.JWT_PASSPHRASE }}
-      
-      # Überschreibe DATABASE_URL so, dass sie auf den Service verweist
-      # Beachten Sie: Der Datenbankname muss mit dem MYSQL_DATABASE-Wert übereinstimmen
-      DATABASE_URL: "mysql://root:@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4"
-      
-      # Setze die restlichen Umgebungsvariablen für die Tests
-      APP_ENV: test
-      APP_SECRET: SomeSecretKey
-      # ... fügen Sie hier weitere notwendige ENV-Variablen hinzu
-      
+          --health-retries=3
     steps:
+      # 1. Checkout code
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Set up PHP
+      # 2. PHP einrichten
+      - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: mbstring, pdo_mysql, xml
-          coverage: none
+          tools: composer
 
-      # --- JWT FIX: Create JWT Key Files for Testing ---
-      - name: 🔑 Create JWT Key Files for Testing 
-        # Create the private.pem and public.pem files using GitHub Secrets content
-        run: |
-          mkdir -p config/jwt
-          # Write the content of the keys from the GitHub Secrets into the files
-          echo "${{ secrets.JWT_PRIVATE_KEY_CONTENT }}" > config/jwt/private.pem
-          echo "${{ secrets.JWT_PUBLIC_KEY_CONTENT }}" > config/jwt/public.pem
+      # 3. Composer Install für Tests (inkl. dev)
+      - name: Install dependencies for tests
+        run: composer install --optimize-autoloader --no-interaction --prefer-dist
 
-      - name: Ensure migrations directory exists
-        run: |
-          if [ ! -d migrations ]; then mkdir -p migrations; fi
-          if [ ! -f migrations/.gitkeep ]; then touch migrations/.gitkeep; fi
-          git ls-files --error-unmatch migrations/.gitkeep || echo "migrations/.gitkeep not tracked (ok for CI)"
-
+      # 4. Auf MySQL warten
       - name: Wait for MySQL to be ready
         run: |
-          # Installation des MySQL-Clients beibehalten, da er für 'mysqladmin ping' notwendig ist
-          sudo apt-get update -y
-          sudo apt-get install -y mysql-client
-          
-          # Warte auf MySQL
-          for i in {1..30}; do
-            mysqladmin ping -h 127.0.0.1 -P 3306 -u root --silent && break
-            echo "Waiting for mysql..."
+          until mysql -h 127.0.0.1 -u root -proot -e "SELECT 1" >/dev/null 2>&1; do
+            echo "Waiting for MySQL..."
             sleep 2
           done
+      # 5. Test-Datenbank URL setzen
+      - name: Set test DATABASE_URL
+        run: echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/test_blog" >> $GITHUB_ENV
 
-      - name: Copy .env.test.local
-        run: php -r "file_exists('.env.test.local') || copy('.env.test', '.env.test.local');"
+      # 6. Test-Datenbank erstellen
+      - name: Create test database
+        run: php bin/console doctrine:database:create --env=test || true
 
-      - name: Cache Composer packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.composer/cache
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-composer-
+      # 7. Test-Schema anwenden
+      - name: Update test schema
+        run: php bin/console doctrine:schema:update --env=test --force
 
-      - name: Install Composer dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
-
-      - name: Run Symfony cache clear (test)
-        run: php bin/console cache:clear --env=test
-
-      # FIX 2: We don't need to explicitly create the DB here, as 'doctrine:schema:create' can do it,
-      # and it's already set in the 'services' block via MYSQL_DATABASE: test_db
-      # Using the existing 'doctrine:schema:create' as the primary setup step.
-      
-      - name: Run Doctrine schema creation (test)
-        # This will automatically create the database if it doesn't exist and create the schema.
-        run: php bin/console doctrine:schema:create --env=test
-
-      # --- LAST STEP: RUN TESTS ---
-      - name: Run PHPUnit tests
-        run: php -d memory_limit=2G vendor/bin/phpunit tests
+      # 8. PHPUnit Tests
+      - name: Run PHPUnit
+        run: php ./vendor/bin/phpunit --colors=always
