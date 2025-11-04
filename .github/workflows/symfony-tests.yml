@@ -45,7 +45,7 @@ jobs:
           done
       # 5. Test-Datenbank URL setzen
       - name: Set test DATABASE_URL
-        run: echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/test_blog" >> $GITHUB_ENV
+        run: echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/test_blog?serverVersion=10.4.32" >> $GITHUB_ENV
 
       # 6. Test-Datenbank erstellen
       - name: Create test database
