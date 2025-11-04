@@ -54,7 +54,14 @@ jobs:
       # 7. Test-Schema anwenden
       - name: Update test schema
         run: php bin/console doctrine:schema:update --env=test --force
-
-      # 8. PHPUnit Tests
+      # 8. Generate temporary JWT 
+      - name: Generate temporary JWT keys for CI
+        run: |
+          mkdir -p config/jwt
+          openssl genpkey -algorithm RSA -out config/jwt/private.pem -pkeyopt rsa_keygen_bits:2048
+          openssl rsa -pubout -in config/jwt/private.pem -out config/jwt/public.pem
+          chmod 600 config/jwt/private.pem
+          chmod 644 config/jwt/public.pem
+      # 9. PHPUnit Tests
       - name: Run PHPUnit
         run: php ./vendor/bin/phpunit --colors=always
