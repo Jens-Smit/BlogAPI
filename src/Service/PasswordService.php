@@ -1,12 +1,10 @@
 <?php
-
 namespace App\Service;
 
 use App\Entity\User;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -18,31 +16,34 @@ class PasswordService
         private readonly EntityManagerInterface $em,
         private readonly UserPasswordHasherInterface $passwordHasher,
         private readonly MailerInterface $mailer,
-        private readonly string $frontendUrl = 'http://localhost:3000' // Konfigurierbar machen
+        private readonly string $frontendUrl = 'http://localhost:3000',
+        private readonly int $resetTtlSeconds = 3600
     ) {}
 
     /**
-     * Generiert einen Reset-Token und sendet ihn per E-Mail
+     * Generiert einen Reset-Token, speichert Hash+Expiry und sendet Mail (falls User existiert).
+     * Return: plain token (useful for tests or further processing) or null if user not found.
      */
-    public function requestPasswordReset(string $email): void
+    public function requestPasswordReset(string $email): ?string
     {
         $user = $this->userRepository->findOneBy(['email' => $email]);
-        
         if (!$user) {
-            // Aus Sicherheitsgründen keine Info ob User existiert
-            return;
+            // Keine Info zu Existenz zurückgeben
+            return null;
         }
 
-        // Generiere sicheren Token
+        // Sicherer, URL-freundlicher Token
         $token = bin2hex(random_bytes(32));
-        
-        $user->setResetToken($token);
-        $user->setResetTokenExpiresAt(new \DateTimeImmutable('+1 hour'));
-        
+
+        $user->setResetTokenPlain($token, $this->resetTtlSeconds);
+
+        $this->em->persist($user);
         $this->em->flush();
 
-        // E-Mail senden
+        // Send mail (swallow exceptions if you prefer)
         $this->sendResetEmail($user, $token);
+
+        return $token;
     }
 
     /**
@@ -50,59 +51,56 @@ class PasswordService
      */
     public function resetPassword(string $token, string $newPassword): void
     {
-        $user = $this->userRepository->findOneBy(['resetToken' => $token]);
+        // Suche per Hash (sichere Suche)
+        $tokenHash = hash('sha256', $token);
+        $user = $this->userRepository->findOneBy(['resetTokenHash' => $tokenHash]);
 
         if (!$user) {
             throw new BadRequestHttpException('Ungültiger Reset-Token.');
         }
 
+        // Prüfen ob Token noch gültig
         if (!$user->isResetTokenValid()) {
             throw new BadRequestHttpException('Reset-Token ist abgelaufen.');
         }
 
-        // Validiere Passwort
-        if (strlen($newPassword) < 8) {
+        // Passwortvalidierung
+        if (mb_strlen($newPassword) < 8) {
             throw new BadRequestHttpException('Passwort muss mindestens 8 Zeichen lang sein.');
         }
 
         $hashedPassword = $this->passwordHasher->hashPassword($user, $newPassword);
         $user->setPassword($hashedPassword);
-        
-        // Token löschen
-        $user->setResetToken(null);
-        $user->setResetTokenExpiresAt(null);
 
+        // Token löschen
+        $user->clearResetToken();
+
+        $this->em->persist($user);
         $this->em->flush();
     }
 
-    /**
-     * Ändert das Passwort eines authentifizierten Benutzers
-     */
     public function changePassword(User $user, string $currentPassword, string $newPassword): void
     {
-        // Überprüfe aktuelles Passwort
         if (!$this->passwordHasher->isPasswordValid($user, $currentPassword)) {
-          throw new BadRequestHttpException('Das aktuelle Passwort ist ungültig.');
+            throw new BadRequestHttpException('Das aktuelle Passwort ist ungültig.');
         }
-
-        // Validiere neues Passwort
-        if (strlen($newPassword) < 8) {
-            throw new BadRequestHttpException('Neues Passwort muss mindestens 8 Zeichen lang sein.');
-        }
-
         if ($currentPassword === $newPassword) {
             throw new BadRequestHttpException('Neues Passwort muss sich vom alten unterscheiden.');
         }
 
-        $hashedPassword = $this->passwordHasher->hashPassword($user, $newPassword);
-        $user->setPassword($hashedPassword);
+        if (mb_strlen($newPassword) < 8) {
+            throw new BadRequestHttpException('Neues Passwort muss mindestens 8 Zeichen lang sein.');
+        }
 
+        
+
+        $user->setPassword($this->passwordHasher->hashPassword($user, $newPassword));
         $this->em->flush();
     }
 
     private function sendResetEmail(User $user, string $token): void
     {
-        $resetUrl = sprintf('%s/reset-password?token=%s', $this->frontendUrl, $token);
+        $resetUrl = sprintf('%s/reset-password?token=%s', rtrim($this->frontendUrl, '/'), $token);
 
         $email = (new Email())
             ->from('webmaster@jenssmit.de')
@@ -113,9 +111,9 @@ class PasswordService
                 <p>Sie haben eine Anfrage zum Zurücksetzen Ihres Passworts gestellt.</p>
                 <p>Klicken Sie auf folgenden Link, um Ihr Passwort zurückzusetzen:</p>
                 <p><a href="%s">Passwort zurücksetzen</a></p>
-                <p>Dieser Link ist 1 Stunde gültig.</p>
-                <p>Falls Sie diese Anfrage nicht gestellt haben, ignorieren Sie diese E-Mail.</p>',
-                $resetUrl
+                <p>Dieser Link ist %d Minuten gültig.</p>',
+                htmlspecialchars($resetUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                (int) ($this->resetTtlSeconds / 60)
             ));
 
         $this->mailer->send($email);

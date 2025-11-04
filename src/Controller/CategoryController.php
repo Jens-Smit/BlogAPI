@@ -19,9 +19,10 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 // Importiere Doctrine Collections für die korrekte Typhinweis
 use Doctrine\Common\Collections\Collection;
+use Doctrine\ORM\Exception\ORMException;
 // Importiere das Model-Attribut von Nelmio für @Model-Referenzen
 use Nelmio\ApiDocBundle\Attribute\Model;
-
+use Throwable;
 
 class CategoryController extends AbstractController
 {
@@ -489,9 +490,7 @@ class CategoryController extends AbstractController
      */
     private function deleteRecursive(Category $category, EntityManagerInterface $em): void
     {
-        // ... (Methode bleibt unverändert, da sie keine OA-Annotations enthält) ...
-
-        // 1) Lade alle Kategorien einmal und baue Kinder-Map (vermeidet Lazy-Probleme beim Traversieren)
+        // 1) Lade alle Kategorien und baue Kinder-Map
         $all = $em->getRepository(Category::class)->findAll();
         $map = [];
         foreach ($all as $c) {
@@ -508,7 +507,7 @@ class CategoryController extends AbstractController
             }
         }
 
-        // 2) Sammle Post-Order Liste (Kinder bevor Eltern) für den gegebenen Subtree
+        // 2) Sammle Post-Order Liste (Kinder vor Eltern)
         $order = [];
         $visit = function(int $cid) use (&$visit, &$order, $map) {
             foreach ($map[$cid]['children'] as $childId) {
@@ -519,7 +518,6 @@ class CategoryController extends AbstractController
 
         $rootId = $category->getId();
         if (!isset($map[$rootId])) {
-            // Nichts zu tun
             return;
         }
         $visit($rootId);
@@ -528,22 +526,52 @@ class CategoryController extends AbstractController
             return;
         }
 
-        // 3) Lösche alle Posts, die zu diesen Kategorien gehören (Bulk-Delete)
-        $qb = $em->createQueryBuilder();
-            $qb->delete(Post::class, 'p')
-            ->where($qb->expr()->in('p.category', ':ids'))
-            ->setParameter('ids', array_map('intval', $order)) // Type-cast!
-            ->getQuery()
-            ->execute();
-
-        // 4) Entferne Kategorien in Post-Order (Kinder zuerst)
-        foreach ($order as $cid) {
-            $ref = $em->getReference(Category::class, $cid);
-            $em->remove($ref);
+        // Defensive validation: nur gültige positive Integer-IDs behalten
+        $ids = array_values(array_filter(array_map('intval', $order), fn($v) => $v > 0));
+        if (empty($ids)) {
+            return;
         }
 
-        // 5) Einmal flush am Ende
-        $em->flush();
+        // 3) Bulk-Delete der Posts in Transaktion, in Chunks (sicher gegen große IN-Listen)
+        $conn = $em->getConnection();
+        $chunkSize = 1000; // anpassbar
+        try {
+            $em->beginTransaction();
+
+            // Verwende DQL-Delete via QueryBuilder, aber binde Arrays sicher
+            // Chunking: für sehr große ID-Listen
+            $chunks = array_chunk($ids, $chunkSize);
+            foreach ($chunks as $chunk) {
+                // DQL -> QueryBuilder löscht sicher mit gebundenen Parametern
+                $qb = $em->createQueryBuilder();
+                $qb->delete(Post::class, 'p')
+                ->where($qb->expr()->in('p.category', ':ids'))
+                ->setParameter('ids', $chunk);
+                $qb->getQuery()->execute();
+            }
+
+            // 4) Entferne Kategorien in Post-Order (Kinder zuerst)
+            foreach ($order as $cid) {
+                // referenzieren statt laden, spart Memory
+                $ref = $em->getReference(Category::class, $cid);
+                $em->remove($ref);
+            }
+
+            // 5) Einmal flush und Commit
+            $em->flush();
+            $em->commit();
+        } catch (Throwable $e) {
+            // Rollback bei Fehler und weiterwerfen oder loggen
+            try {
+                if ($em->getConnection()->isTransactionActive()) {
+                    $em->rollback();
+                }
+            } catch (Throwable $inner) {
+                // swallow secondary exceptions or log
+            }
+
+            throw $e instanceof ORMException ? $e : new \RuntimeException('Fehler beim Löschen der Kategorie', 0, $e);
+        }
     }
 
 

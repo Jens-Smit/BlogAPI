@@ -4,6 +4,8 @@ namespace App\EventListener;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class SecurityHeadersListener implements EventSubscriberInterface
 {
@@ -25,31 +27,31 @@ class SecurityHeadersListener implements EventSubscriberInterface
             return;
         }
 
-        $response = $event->getResponse();
         $request = $event->getRequest();
 
-        // 1. HTTPS Redirect nur in Production
+        // 1) HTTPS-Redirect nur in prod und nur wenn nicht secure
         if ('prod' === $this->appEnv && !$request->isSecure()) {
-            $url = str_replace('http://', 'https://', $request->getUri());
-            $response->setStatusCode(301);
-            $response->headers->set('Location', $url);
-            $event->setResponse($response);
+            $url = 'https://' . $request->getHost() . $request->getRequestUri();
+            $event->setResponse(new RedirectResponse($url, Response::HTTP_MOVED_PERMANENTLY));
             return;
         }
 
-        // 2. Strict-Transport-Security (HSTS)
-        // Browser wird gezwungen HTTPS zu verwenden für 1 Jahr
-        $response->headers->set(
-            'Strict-Transport-Security',
-            'max-age=31536000; includeSubDomains; preload'
-        );
+        // 2) Header nur auf der eigentlichen Response setzen
+        $response = $event->getResponse();
 
-        // 3. Content-Security-Policy (CSP)
-        // Verhindert XSS durch Limiting von Script-Sources
+        // HSTS nur setzen, wenn die aktuelle Verbindung HTTPS ist
+        if ($request->isSecure()) {
+            $response->headers->set(
+                'Strict-Transport-Security',
+                'max-age=31536000; includeSubDomains; preload'
+            );
+        }
+
+        // CSP
         $response->headers->set(
             'Content-Security-Policy',
             "default-src 'none'; " .
-            "script-src 'self'; " .  // KEIN unsafe-inline!
+            "script-src 'self'; " .
             "style-src 'self'; " .
             "img-src 'self' data: https:; " .
             "font-src 'self'; " .
@@ -59,30 +61,20 @@ class SecurityHeadersListener implements EventSubscriberInterface
             "form-action 'self'"
         );
 
-        // 4. X-Content-Type-Options (MIME Sniffing Prevention)
-        // Browser wird gezwungen Content-Type zu respektieren
+        // Weitere Sicherheitsheader
         $response->headers->set('X-Content-Type-Options', 'nosniff');
-
-        // 5. X-Frame-Options (Clickjacking Prevention)
-        // Verhindert dass Seite in iFrame eingebettet wird
         $response->headers->set('X-Frame-Options', 'DENY');
-
-        // 6. X-XSS-Protection (Legacy Browser Support)
         $response->headers->set('X-XSS-Protection', '1; mode=block');
-
-        // 7. Referrer-Policy
-        // Kontrolliert welche Referrer-Info weitergegeben wird
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
-
-        // 8. Permissions-Policy (Feature Policy)
-        // Deaktiviert gefährliche APIs
         $response->headers->set(
             'Permissions-Policy',
             'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()'
         );
 
-        // 9. Remove Server Info (Information Disclosure Prevention)
+        // Remove server-identifying headers
         $response->headers->remove('Server');
         $response->headers->remove('X-Powered-By');
+
+        $event->setResponse($response);
     }
 }

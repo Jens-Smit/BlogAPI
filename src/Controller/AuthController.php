@@ -79,7 +79,16 @@ class AuthController extends AbstractController
     {
         $limiter = $this->loginLimiter->create($request->getClientIp());
         if (!$limiter->consume(1)->isAccepted()) {
-            return new JsonResponse(['error' => 'Zu viele Login-Versuche.'], 429);
+            // ✅ Log suspicious activity
+            $this->logger->warning('Rate limit exceeded for IP', [
+                'ip' => $request->getClientIp(),
+                'email' => $data['email'] ?? 'unknown'
+            ]);
+            
+            return new JsonResponse([
+                'error' => 'Zu viele Versuche',
+                'retry_after' => $limiter->consume(0)->getRetryAfter()->getTimestamp()
+            ], 429);
         }
 
         $data = json_decode($request->getContent(), true);

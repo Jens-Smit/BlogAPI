@@ -8,6 +8,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use DateTimeImmutable;
 use OpenApi\Attributes as OA; 
 
 
@@ -35,8 +36,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $password = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    private ?string $resetToken = null;
+    private ?string $resetTokenHash = null;
 
+    // transient (not persisted) plain token for immediate use (e.g. to email or tests)
+    private ?string $resetToken = null;
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $resetTokenExpiresAt = null;
 
@@ -111,21 +114,83 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
     
+     /**
+     * For tests / mailer: return the transient plain token if present.
+     */
     public function getResetToken(): ?string
     {
         return $this->resetToken;
     }
-
-    public function setResetToken(?string $resetToken): static
+    public function setResetToken(?string $token): static   
     {
-        $this->resetToken = $resetToken;
+        if ($token === null) {
+            $this->resetToken = null;
+            $this->resetTokenHash = null;
+            $this->resetTokenExpiresAt = null;
+            return $this;
+        }
+
+        $this->resetToken = $token;
+        $this->resetTokenHash = hash('sha256', $token);
+        $this->resetTokenExpiresAt = new DateTimeImmutable('+1 hour');
+
         return $this;
+    }
+    /**
+     * Set transient plain token and persist only the hash + expiry
+     */
+    public function setResetTokenPlain(string $token, int $ttlSeconds = 3600): static
+    {
+        // keep transient plain token for immediate use (not persisted)
+        $this->resetToken = $token;
+
+        // store hash for persistence
+        $this->resetTokenHash = hash('sha256', $token);
+
+        $this->resetTokenExpiresAt = new DateTimeImmutable(sprintf('+%d seconds', $ttlSeconds));
+
+        return $this;
+    }
+
+    public function getResetTokenHash(): ?string
+    {
+        return $this->resetTokenHash;
     }
 
     public function getResetTokenExpiresAt(): ?\DateTimeImmutable
     {
         return $this->resetTokenExpiresAt;
     }
+
+    public function clearResetToken(): static
+    {
+        $this->resetToken = null;
+        $this->resetTokenHash = null;
+        $this->resetTokenExpiresAt = null;
+        return $this;
+    }
+
+    /**
+     * Validate a provided token against the stored hash and expiry.
+     */
+    public function verifyResetToken(string $token): bool
+    {
+        if (!$this->resetTokenHash || !$this->resetTokenExpiresAt) {
+            return false;
+        }
+
+        // check expiry first
+        if ($this->resetTokenExpiresAt <= new DateTimeImmutable()) {
+            return false;
+        }
+
+        $givenHash = hash('sha256', $token);
+        return hash_equals($this->resetTokenHash, $givenHash);
+    }
+
+    
+
+    
 
     public function setResetTokenExpiresAt(?\DateTimeImmutable $resetTokenExpiresAt): static
     {

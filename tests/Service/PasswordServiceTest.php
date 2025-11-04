@@ -84,11 +84,12 @@ class PasswordServiceTest extends TestCase
         $user->setPassword('oldhashedpassword');
         $user->setResetToken('validtoken123');
         $user->setResetTokenExpiresAt(new \DateTimeImmutable('+1 hour'));
+        $expectedHash = hash('sha256', 'validtoken123');
 
         $this->userRepository
             ->expects($this->once())
             ->method('findOneBy')
-            ->with(['resetToken' => 'validtoken123'])
+            ->with(['resetTokenHash' => $expectedHash])
             ->willReturn($user);
 
         $this->passwordHasher
@@ -111,10 +112,12 @@ class PasswordServiceTest extends TestCase
         $this->expectException(BadRequestHttpException::class);
         $this->expectExceptionMessage('Ungültiger Reset-Token.');
 
+        $expectedHash = hash('sha256', 'invalidtoken');
+
         $this->userRepository
             ->expects($this->once())
             ->method('findOneBy')
-            ->with(['resetToken' => 'invalidtoken'])
+            ->with(['resetTokenHash' => $expectedHash])
             ->willReturn(null);
 
         $this->passwordService->resetPassword('invalidtoken', 'newPassword123');
@@ -130,10 +133,12 @@ class PasswordServiceTest extends TestCase
         $user->setResetToken('expiredtoken');
         $user->setResetTokenExpiresAt(new \DateTimeImmutable('-1 hour'));
 
+        $expectedHash = hash('sha256', 'expiredtoken');
+
         $this->userRepository
             ->expects($this->once())
             ->method('findOneBy')
-            ->with(['resetToken' => 'expiredtoken'])
+            ->with(['resetTokenHash' => $expectedHash])
             ->willReturn($user);
 
         $this->passwordService->resetPassword('expiredtoken', 'newPassword123');
@@ -148,9 +153,12 @@ class PasswordServiceTest extends TestCase
         $user->setResetToken('validtoken');
         $user->setResetTokenExpiresAt(new \DateTimeImmutable('+1 hour'));
 
+        $expectedHash = hash('sha256', 'validtoken');
+
         $this->userRepository
             ->expects($this->once())
             ->method('findOneBy')
+            ->with(['resetTokenHash' => $expectedHash])
             ->willReturn($user);
 
         $this->passwordService->resetPassword('validtoken', 'short');
@@ -160,25 +168,27 @@ class PasswordServiceTest extends TestCase
     {
         $user = new User();
         $user->setEmail('test@example.com');
-        $user->setPassword('oldhashedpassword');
+        $user->setPassword('oldhashed');
 
+        // valid current password check
         $this->passwordHasher
             ->expects($this->once())
             ->method('isPasswordValid')
-            ->with($user, 'oldPassword123')
+            ->with($user, 'currentSecret')
             ->willReturn(true);
 
+        // hashing the new password
         $this->passwordHasher
             ->expects($this->once())
             ->method('hashPassword')
-            ->with($user, 'newPassword123')
-            ->willReturn('newhashedpassword');
+            ->with($user, 'newSecret123')
+            ->willReturn('newhashed');
 
         $this->em->expects($this->once())->method('flush');
 
-        $this->passwordService->changePassword($user, 'oldPassword123', 'newPassword123');
+        $this->passwordService->changePassword($user, 'currentSecret', 'newSecret123');
 
-        $this->assertEquals('newhashedpassword', $user->getPassword());
+        $this->assertEquals('newhashed', $user->getPassword());
     }
 
     public function testChangePasswordWithInvalidCurrentPassword(): void
@@ -187,7 +197,7 @@ class PasswordServiceTest extends TestCase
         $this->expectExceptionMessage('Das aktuelle Passwort ist ungültig.');
 
         $user = new User();
-        $user->setPassword('oldhashedpassword');
+        $user->setPassword('irrelevant');
 
         $this->passwordHasher
             ->expects($this->once())
@@ -195,36 +205,41 @@ class PasswordServiceTest extends TestCase
             ->with($user, 'wrongPassword')
             ->willReturn(false);
 
-        $this->passwordService->changePassword($user, 'wrongPassword', 'newPassword123');
+        $this->passwordService->changePassword($user, 'wrongPassword', 'someNewPass123');
     }
 
-    public function testChangePasswordWithShortNewPassword(): void
+    public function testChangePasswordWithTooShortNewPassword(): void
     {
         $this->expectException(BadRequestHttpException::class);
         $this->expectExceptionMessage('Neues Passwort muss mindestens 8 Zeichen lang sein.');
 
         $user = new User();
+        $user->setPassword('old');
 
         $this->passwordHasher
             ->expects($this->once())
             ->method('isPasswordValid')
+            ->with($user, 'current')
             ->willReturn(true);
 
-        $this->passwordService->changePassword($user, 'oldPassword123', 'short');
+        $this->passwordService->changePassword($user, 'current', 'short');
     }
 
-    public function testChangePasswordWithSamePassword(): void
+    public function testChangePasswordWithSameAsOld(): void
     {
         $this->expectException(BadRequestHttpException::class);
         $this->expectExceptionMessage('Neues Passwort muss sich vom alten unterscheiden.');
 
         $user = new User();
+        $user->setPassword('oldpwd');
 
         $this->passwordHasher
             ->expects($this->once())
             ->method('isPasswordValid')
+            ->with($user, 'same')
             ->willReturn(true);
 
-        $this->passwordService->changePassword($user, 'samePassword123', 'samePassword123');
+        // simulate user submitting same password as current
+        $this->passwordService->changePassword($user, 'same', 'same');
     }
 }

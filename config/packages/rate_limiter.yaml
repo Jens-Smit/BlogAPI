@@ -5,6 +5,8 @@ framework:
             policy: 'sliding_window'
             limit: 5
             interval: '15 minutes'
+            # ✅ CRITICAL: Lock-out nach 5 Versuchen
+            lock_factory: 'lock.default.factory'
             
         password_reset_limiter:
             policy: 'sliding_window'
@@ -17,6 +19,6 @@ framework:
             interval: '1 hour'
             
         api_general:
-            policy: 'sliding_window'
+            policy: 'token_bucket'
             limit: 100
-            interval: '1 minute'
+            rate: { interval: '1 minute', amount: 60 }

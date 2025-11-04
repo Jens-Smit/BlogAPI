@@ -31,3 +31,9 @@ gesdinet_jwt_refresh_token:
     # Return Refresh Token Expiration
     return_expiration: true
     return_expiration_parameter_name: refresh_token_expiration
+when@prod:
+    gesdinet_jwt_refresh_token:
+        cookie:
+            secure: true  # ✅ Nur HTTPS
+            same_site: 'strict'  # ✅ CSRF-Schutz erhöhen
+            http_only: true
