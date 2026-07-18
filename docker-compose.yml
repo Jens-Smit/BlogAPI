@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # MySQL Container
   db:
@@ -43,8 +41,8 @@ services:
   # React (Frontend) Container
   frontend:
     build:
-      context: .
-      dockerfile: docker/frontend/Dockerfile
+      context: ./public/frontend
+      dockerfile: ../../docker/frontend/Dockerfile
     container_name: blogapi_frontend
     depends_on:
       - backend
