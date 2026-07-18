@@ -4,14 +4,14 @@ FROM node:18-alpine
 # Arbeitsverzeichnis setzen
 WORKDIR /app
 
-# Abhängigkeiten kopieren
-COPY public/frontend/package.json public/frontend/package-lock.json ./
+# Abhängigkeiten kopieren (direkt aus dem aktuellen Verzeichnis)
+COPY package.json package-lock.json ./
 
 # npm install ausführen
 RUN npm install
 
 # Projekt kopieren
-COPY public/frontend/ .
+COPY . .
 
 # Port freigeben
 EXPOSE 3000
