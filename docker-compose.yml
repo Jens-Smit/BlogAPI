@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # MySQL Container
+  db:
+    image: mysql:8.0
+    container_name: blogapi_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: blog_db
+      MYSQL_USER: db_user
+      MYSQL_PASSWORD: db_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - blogapi_network
+
+  # Symfony (PHP) Container
+  backend:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: blogapi_backend
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "mysql://db_user:db_password@db:3306/blog_db"
+      APP_ENV: dev
+      APP_SECRET: your_secret_key_here
+      TRUSTED_PROXIES: 127.0.0.1,127.0.0.2
+      CORS_ALLOW_ORIGIN: 'http://localhost:3000'
+    volumes:
+      - ./:/var/www/html
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    ports:
+      - "8000:8000"
+    networks:
+      - blogapi_network
+    command: sh -c "composer install && php bin/console doctrine:database:create && php bin/console doctrine:migrations:migrate && symfony serve --no-tls"
+
+  # React (Frontend) Container
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: blogapi_frontend
+    depends_on:
+      - backend
+    volumes:
+      - ./public/frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - blogapi_network
+    command: sh -c "npm install && npm run dev"
+
+# Volumes für MySQL-Daten
+volumes:
+  mysql_data:
+
+# Netzwerk für die Kommunikation zwischen Containern
+networks:
+  blogapi_network:
+    driver: bridge
