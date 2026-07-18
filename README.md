@@ -1,11 +1,133 @@
 # Symfony Blog API - Produktionsreife Dokumentation
 
-Eine gehärtete, produktionsreife Blog-API mit erweiterten Security-Features, JWT-Authentifizierung, hierarchischen Kategorien und umfassender Dateiverwaltung.
+Eine gehärtete, produktionsreife Blog-API mit erweiterten Security-Features, JWT-Authentifizierung, hierarchischen Kategorien, umfassender Dateiverwaltung **und Docker-Unterstützung**. 
 
-**Version:** 2.0.0  
-**Status:** Production-Ready mit Security Hardening  
+**Version:** 2.0.0 (mit Docker & Frontend)  
+**Status:** Production-Ready mit Security Hardening & Docker  
 **Lizenz:** MIT  
 **Security Level:** ⭐⭐⭐⭐⭐ (Hardened)
+
+---
+
+## 🚀 Schnellstart mit Docker
+
+### Vorraussetzungen
+- [Docker](https://www.docker.com/get-docker) (Version 20.10+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (Version 1.29+)
+
+### 1. Repository klonen
+```bash
+git clone https://github.com/Jens-Smit/BlogAPI.git
+cd BlogAPI
+```
+
+### 2. Docker-Container starten
+```bash
+docker-compose up --build
+```
+
+### 3. Zugriff auf die Anwendung
+- **Backend (Symfony):** [http://localhost:8000](http://localhost:8000)
+- **Frontend (React):** [http://localhost:3000](http://localhost:3000)
+- **MySQL-Datenbank:** `mysql -h 127.0.0.1 -P 3306 -u db_user -p` (Passwort: `db_password`)
+
+---
+
+## 🐳 Docker-Architektur
+
+### Container-Übersicht
+
+<mui:table-metadata title="Docker-Container" />
+
+| Container | Port | Beschreibung | Technologien |
+|-----------|------|--------------|--------------|
+| `blogapi_db` | 3306 | MySQL-Datenbank | MySQL 8.0 |
+| `blogapi_backend` | 8000 | Symfony Backend | PHP 8.2, Apache, Symfony 7.3 |
+| `blogapi_frontend` | 3000 | React Frontend | Node.js 18, Vite |
+
+### Docker-Konfiguration
+- **Netzwerk:** `blogapi_network` (Bridge-Netzwerk für interne Kommunikation)
+- **Volumes:**
+  - `mysql_data`: Persistente Speicherung der MySQL-Daten
+  - `./:/var/www/html`: Symfony-Projektverzeichnis
+  - `./public/frontend:/app`: React-Projektverzeichnis
+
+### Docker-Befehle
+
+<mui:table-metadata title="Docker-Befehle" />
+
+| Befehl | Beschreibung |
+|--------|--------------|
+| `docker-compose up --build` | Container bauen und starten |
+| `docker-compose down` | Container stoppen und entfernen |
+| `docker-compose logs -f` | Logs aller Container in Echtzeit anzeigen |
+| `docker-compose exec backend bash` | Shell im Symfony-Container öffnen |
+| `docker-compose exec frontend sh` | Shell im React-Container öffnen |
+| `docker-compose exec db mysql -u db_user -p` | MySQL-Shell öffnen |
+
+---
+
+## 📁 Projektstruktur
+
+```
+BlogAPI/
+├── config/                 # Symfony-Konfigurationen
+│   ├── packages/           # Bundle-Konfigurationen
+│   └── jwt/                # JWT-Schlüssel
+├── public/                # Öffentliche Dateien
+│   ├── frontend/           # React-Frontend (wird nach public/frontend gebaut)
+│   │   ├── src/            # React-Quellcode
+│   │   │   ├── components/ # React-Komponenten
+│   │   │   │   ├── Navbar.jsx      # Navigationsleiste mit Theme-Toggle
+│   │   │   │   ├── Footer.jsx      # Footer-Komponente
+│   │   │   │   ├── HeroSection.jsx # Hero-Bereich mit Animationen
+│   │   │   │   ├── PostCard.jsx    # Beitragskarten
+│   │   │   │   ├── RichTextEditor.jsx # Tiptap-Editor
+│   │   │   │   ├── Captcha.jsx     # CAPTCHA-Komponente
+│   │   │   │   ├── LoginForm.jsx   # Login-Formular
+│   │   │   │   ├── RegisterForm.jsx # Registrierungsformular
+│   │   │   │   └── ContactForm.jsx # Kontaktformular
+│   │   │   ├── pages/              # Seiten-Komponenten
+│   │   │   │   ├── Home.jsx        # Startseite
+│   │   │   │   ├── Blog.jsx        # Blog-Übersicht
+│   │   │   │   ├── PostDetail.jsx  # Einzelner Blog-Post
+│   │   │   │   ├── CreatePost.jsx  # Post erstellen
+│   │   │   │   ├── EditPost.jsx    # Post bearbeiten
+│   │   │   │   ├── Dashboard.jsx   # Dashboard
+│   │   │   │   ├── Profile.jsx     # Benutzerprofil
+│   │   │   │   ├── Login.jsx       # Login-Seite
+│   │   │   │   └── Contact.jsx     # Kontaktseite
+│   │   │   ├── services/           # API-Services
+│   │   │   │   ├── api.js          # Axios-Instanz mit Interceptor
+│   │   │   │   ├── auth.js         # Authentifizierungs-Service
+│   │   │   │   ├── posts.js        # Post-Service
+│   │   │   │   ├── categories.js   # Kategorie-Service
+│   │   │   │   └── contact.js      # Kontakt-Service
+│   │   │   ├── context/            # React Contexts
+│   │   │   │   └── AuthContext.jsx # Authentifizierungskontext
+│   │   │   ├── App.jsx             # Haupt-App-Komponente mit Routing
+│   │   │   └── styles/             # Stile
+│   │   │       └── index.css       # Tailwind CSS und benutzerdefinierte Stile
+│   │   ├── package.json            # Node.js-Abhängigkeiten
+│   │   ├── vite.config.js          # Vite-Konfiguration
+│   │   ├── tailwind.config.js      # Tailwind-Konfiguration
+│   │   └── postcss.config.js        # PostCSS-Konfiguration
+│   └── uploads/            # Hochgeladene Dateien
+├── docker/                 # Docker-Konfigurationen
+│   ├── php/                # PHP/Symfony Docker-Konfiguration
+│   │   ├── Dockerfile      # PHP-Dockerfile
+│   │   └── php.ini         # PHP-Konfiguration
+│   └── frontend/           # React Docker-Konfiguration
+│       └── Dockerfile      # Node.js-Dockerfile
+├── src/                    # Symfony-Quellcode
+│   ├── Controller/         # API-Controller
+│   ├── Entity/             # Doctrine-Entitäten
+│   ├── Repository/         # Doctrine-Repositories
+│   └── ...
+├── .env.local              # Lokale Umgebungsvariablen
+├── docker-compose.yml      # Docker Compose-Konfiguration
+└── README.md               # Diese Datei
+```
 
 ---
 
@@ -74,10 +196,14 @@ Permissions-Policy: geolocation=(), microphone=(), camera=(), [...]
 
 ## 📋 Inhaltsverzeichnis
 
-- [Features](#-features)
+- [Schnellstart mit Docker](#-schnellstart-mit-docker)
+- [Docker-Architektur](#-docker-architektur)
+- [Projektstruktur](#-projektstruktur)
 - [Security Features](#-security-features)
+- [Features](#-features)
 - [Technologien](#-technologien)
 - [Installation](#-installation)
+- [Frontend (React)](#-frontend-react)
 - [Konfiguration](#-konfiguration)
 - [API-Dokumentation](#-api-dokumentation)
 - [Security Best Practices](#-security-best-practices)
@@ -100,15 +226,21 @@ Permissions-Policy: geolocation=(), microphone=(), camera=(), [...]
 - ✅ **Audit Logging** für Security-Events
 - ✅ **Content Sanitization** mit HTMLPurifier
 
-### Security Features (Neu)
-- ✅ **XSS-Schutz** auf allen Eingaben
-- ✅ **CSRF-Schutz** via SameSite Cookies
-- ✅ **SQL Injection Prevention** durch ORM
-- ✅ **Path Traversal Protection**
-- ✅ **Polyglot Attack Prevention** bei Uploads
-- ✅ **Information Disclosure Prevention**
-- ✅ **Security Headers** automatisch gesetzt
-- ✅ **HTTPS Enforcement** in Production
+### Docker Features
+- ✅ **Multi-Container-Setup** mit Docker Compose
+- ✅ **Isolierte Umgebungen** für Backend, Frontend und Datenbank
+- ✅ **Persistente Datenbank** mit Docker Volumes
+- ✅ **Automatisierte Abhängigkeiten-Installation** beim Container-Start
+- ✅ **Hot-Reloading** für Frontend und Backend
+
+### Frontend Features
+- ✅ **Responsive Design** mit Tailwind CSS
+- ✅ **React Router** für Client-seitiges Routing
+- ✅ **Axios** für API-Anfragen mit JWT-Interceptor
+- ✅ **Rich Text Editor** (Tiptap) für Blog-Posts
+- ✅ **Formularvalidierung** mit React Hook Form
+- ✅ **Dark/Light Theme Toggle** mit LocalStorage
+- ✅ **Micro-Interactions** (Scroll-Trigger, Hover-Effekte)
 
 ---
 
@@ -119,6 +251,15 @@ Permissions-Policy: geolocation=(), microphone=(), camera=(), [...]
 - **Symfony 7.3** - Stabiles Framework
 - **Doctrine ORM 3.0+** mit Prepared Statements
 - **MySQL 8.0+** / **MariaDB 10.4+**
+
+### Frontend Stack
+- **React 18+** - UI-Bibliothek
+- **Vite** - Build-Tool
+- **Tailwind CSS** - Utility-first CSS
+- **Axios** - HTTP-Client
+- **React Router** - Client-seitiges Routing
+- **Tiptap** - Rich Text Editor
+- **React Hook Form** - Formular-Handling
 
 ### Security Libraries
 - **Lexik JWT Bundle 3.0** - JWT-Authentifizierung
@@ -134,7 +275,32 @@ Permissions-Policy: geolocation=(), microphone=(), camera=(), [...]
 
 ## 📦 Installation
 
-### Schritt 1: System-Voraussetzungen prüfen
+### Option 1: Installation mit Docker (empfohlen)
+
+#### Schritt 1: Docker und Docker Compose installieren
+- [Docker installieren](https://docs.docker.com/get-docker/)
+- [Docker Compose installieren](https://docs.docker.com/compose/install/)
+
+#### Schritt 2: Repository klonen
+```bash
+git clone https://github.com/Jens-Smit/BlogAPI.git
+cd BlogAPI
+```
+
+#### Schritt 3: Docker-Container starten
+```bash
+docker-compose up --build
+```
+
+#### Schritt 4: Anwendung testen
+- **Backend:** [http://localhost:8000](http://localhost:8000)
+- **Frontend:** [http://localhost:3000](http://localhost:3000)
+
+---
+
+### Option 2: Manuelle Installation (ohne Docker)
+
+#### Schritt 1: System-Voraussetzungen prüfen
 
 ```bash
 # PHP-Version prüfen
@@ -148,14 +314,14 @@ curl -sS https://getcomposer.org/installer | php
 mv composer.phar /usr/local/bin/composer
 ```
 
-### Schritt 2: Repository klonen
+#### Schritt 2: Repository klonen
 
 ```bash
 git clone https://github.com/Jens-Smit/BlogAPI.git
 cd BlogAPI
 ```
 
-### Schritt 3: Dependencies installieren
+#### Schritt 3: Dependencies installieren
 
 ```bash
 # Development
@@ -165,7 +331,14 @@ composer install
 composer install --no-dev --optimize-autoloader
 ```
 
-### Schritt 4: Umgebungsvariablen konfigurieren
+#### Schritt 4: Frontend-Dependencies installieren
+```bash
+cd public/frontend
+npm install
+cd ../../
+```
+
+#### Schritt 5: Umgebungsvariablen konfigurieren
 
 ```bash
 cp .env .env.local
@@ -203,7 +376,7 @@ CONTACT_FROM_EMAIL=noreply@yourdomain.com
 CONTACT_TO_EMAIL=support@yourdomain.com
 ```
 
-### Schritt 5: Datenbank einrichten
+#### Schritt 6: Datenbank einrichten
 
 ```bash
 # Datenbank erstellen
@@ -216,7 +389,7 @@ php bin/console doctrine:migrations:migrate --no-interaction
 # php bin/console doctrine:fixtures:load  # NUR in Development
 ```
 
-### Schritt 6: JWT-Schlüssel generieren (SICHER!)
+#### Schritt 7: JWT-Schlüssel generieren (SICHER!)
 
 ```bash
 # Mit starkem Passphrase
@@ -228,7 +401,7 @@ chmod 644 config/jwt/public.pem
 chown www-data:www-data config/jwt/private.pem config/jwt/public.pem
 ```
 
-### Schritt 7: Upload-Verzeichnis sichern
+#### Schritt 8: Upload-Verzeichnis sichern
 
 ```bash
 # Verzeichnis erstellen
@@ -244,6 +417,89 @@ cat > public/uploads/.htaccess << 'EOF'
     Require all denied
 </FilesMatch>
 EOF
+```
+
+#### Schritt 9: Frontend bauen und starten
+```bash
+cd public/frontend
+npm run build
+cd ../../
+```
+
+---
+
+## 🖥️ Frontend (React)
+
+### Projektstruktur
+
+```
+public/frontend/
+├── src/
+│   ├── components/         # Wiederverwendbare Komponenten
+│   │   ├── Navbar.jsx      # Navigationsleiste mit Theme-Toggle
+│   │   ├── Footer.jsx      # Footer-Komponente
+│   │   ├── HeroSection.jsx # Hero-Bereich mit Animationen
+│   │   ├── PostCard.jsx    # Beitragskarten
+│   │   ├── RichTextEditor.jsx # Tiptap-Editor
+│   │   ├── Captcha.jsx     # CAPTCHA-Komponente
+│   │   ├── LoginForm.jsx   # Login-Formular
+│   │   ├── RegisterForm.jsx # Registrierungsformular
+│   │   └── ContactForm.jsx # Kontaktformular
+│   ├── pages/              # Seiten-Komponenten
+│   │   ├── Home.jsx        # Startseite
+│   │   ├── Blog.jsx        # Blog-Übersicht
+│   │   ├── PostDetail.jsx  # Einzelner Blog-Post
+│   │   ├── CreatePost.jsx  # Post erstellen
+│   │   ├── EditPost.jsx    # Post bearbeiten
+│   │   ├── Dashboard.jsx   # Dashboard
+│   │   ├── Profile.jsx     # Benutzerprofil
+│   │   ├── Login.jsx       # Login-Seite
+│   │   ├── Register.jsx    # Registrierungsseite
+│   │   └── Contact.jsx     # Kontaktseite
+│   ├── services/           # API-Services
+│   │   ├── api.js          # Axios-Instanz mit Interceptor
+│   │   ├── auth.js         # Authentifizierungs-Service
+│   │   ├── posts.js        # Post-Service
+│   │   ├── categories.js   # Kategorie-Service
+│   │   └── contact.js      # Kontakt-Service
+│   ├── context/            # React Contexts
+│   │   └── AuthContext.jsx # Authentifizierungskontext
+│   ├── App.jsx             # Haupt-App-Komponente mit Routing
+│   ├── index.jsx           # Einstiegspunkt
+│   └── styles/
+│       └── index.css       # Tailwind CSS und benutzerdefinierte Stile
+├── package.json            # Node.js-Abhängigkeiten
+├── vite.config.js          # Vite-Konfiguration
+├── tailwind.config.js      # Tailwind-Konfiguration
+└── postcss.config.js        # PostCSS-Konfiguration
+```
+
+### Wichtige Frontend-Features
+
+#### 1. **API-Integration mit Axios**
+- **JWT-Interceptor**: Automatisches Hinzufügen des JWT-Tokens zu Anfragen
+- **Error-Handling**: Zentrale Fehlerbehandlung für API-Anfragen
+- **Base-URL**: Dynamische Anpassung an Backend-URL
+
+#### 2. **Authentifizierung**
+- **Login/Logout**: JWT-basierte Authentifizierung
+- **Token-Refresh**: Automatisches Refreshen des Tokens
+- **Protected Routes**: Geschützte Routen mit `ProtectedRoute`-Komponente
+
+#### 3. **Formulare**
+- **React Hook Form**: Formularvalidierung und Handling
+- **Rich Text Editor**: Tiptap für formatierte Blog-Posts
+- **Datei-Uploads**: Drag & Drop für Bilder
+
+#### 4. **UI/UX**
+- **Responsive Design**: Mobile-first mit Tailwind CSS
+- **Dark/Light Theme**: Toggle mit LocalStorage-Persistenz
+- **Animationen**: Scroll-Trigger und Micro-Interactions
+
+### Frontend ausführen (ohne Docker)
+```bash
+cd public/frontend
+npm run dev
 ```
 
 ---
@@ -550,59 +806,6 @@ server {
 }
 ```
 
-### 5. Monitoring & Logging
-
-```yaml
-# config/packages/monolog.yaml (Production)
-when@prod:
-    monolog:
-        handlers:
-            main:
-                type: fingers_crossed
-                action_level: error
-                handler: nested
-            nested:
-                type: stream
-                path: "php://stderr"
-                level: debug
-                formatter: monolog.formatter.json
-            security:
-                type: stream
-                path: "%kernel.logs_dir%/security.log"
-                level: warning
-                channels: ["security"]
-```
-
-**Überwachung einrichten:**
-```bash
-# Logwatch installieren
-apt-get install logwatch
-
-# Täglich Security-Logs prüfen
-logwatch --service symfony --range today --detail high
-```
-
-### 6. Backup Strategy
-
-```bash
-# Automatisches Backup-Script
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR=/backups/blog-api
-
-# Database Backup
-mysqldump -u blog_user -p blog_prod | gzip > $BACKUP_DIR/db_$DATE.sql.gz
-
-# Files Backup
-tar -czf $BACKUP_DIR/uploads_$DATE.tar.gz public/uploads/
-
-# JWT Keys Backup (verschlüsselt!)
-tar -czf - config/jwt/ | openssl enc -aes-256-cbc -salt -out $BACKUP_DIR/jwt_$DATE.tar.gz.enc
-
-# Alte Backups löschen (älter als 30 Tage)
-find $BACKUP_DIR -type f -mtime +30 -delete
-```
-
 ---
 
 ## 🧪 Testing
@@ -763,7 +966,74 @@ curl -I https://api.yourdomain.com/health
 
 ---
 
+## 🖥️ Frontend API-Integration
+
+### API-Endpunkte und Verwendung
+
+<mui:table-metadata title="API-Endpunkte" />
+
+| Endpunkt | Methode | Verwendung | Frontend-Komponente |
+|----------|---------|------------|---------------------|
+| `/api/login_check` | POST | JWT-Login | `LoginForm.jsx` |
+| `/api/register` | POST | Benutzerregistrierung | `RegisterForm.jsx` |
+| `/api/token/refresh` | POST | Token-Erneuerung | `api.js` (Interceptor) |
+| `/api/posts` | GET | Alle Posts abrufen | `Home.jsx`, `Blog.jsx` |
+| `/api/posts/{slug}` | GET | Einzelnen Post abrufen | `PostDetail.jsx` |
+| `/api/posts` | POST | Post erstellen | `CreatePost.jsx` |
+| `/api/posts/{id}` | POST | Post aktualisieren | `EditPost.jsx` |
+| `/api/posts/{id}` | DELETE | Post löschen | `Dashboard.jsx` |
+| `/api/posts/upload` | POST | Bild hochladen | `RichTextEditor.jsx` |
+| `/api/categories` | GET | Kategorien abrufen | `CreatePost.jsx`, `EditPost.jsx` |
+| `/api/contact` | POST | Kontaktformular senden | `ContactForm.jsx` |
+| `/api/captcha` | GET | Captcha generieren | `Captcha.jsx` |
+
+---
+
 ## 🐛 Troubleshooting
+
+### Docker-spezifische Probleme
+
+#### 1. "Container startet nicht"
+```bash
+# Logs prüfen
+docker-compose logs backend
+
+# Container neu bauen
+docker-compose down && docker-compose up --build
+```
+
+#### 2. "Datenbankverbindung fehlgeschlagen"
+```bash
+# Prüfe, ob der MySQL-Container läuft
+docker-compose ps
+
+# MySQL-Logs prüfen
+docker-compose logs db
+
+# Manuell verbinden (im Backend-Container)
+docker-compose exec backend php bin/console doctrine:query:sql "SELECT 1"
+```
+
+#### 3. "Frontend lädt nicht"
+```bash
+# Prüfe, ob der Frontend-Container läuft
+docker-compose ps
+
+# Frontend-Logs prüfen
+docker-compose logs frontend
+
+# Manuell npm install ausführen
+docker-compose exec frontend npm install
+```
+
+#### 4. "CORS-Fehler"
+```bash
+# Prüfe die CORS-Konfiguration in .env.local
+CORS_ALLOW_ORIGIN='http://localhost:3000'
+
+# Backend-Container neu starten
+docker-compose restart backend
+```
 
 ### Security-spezifische Issues
 
@@ -867,7 +1137,13 @@ tail -f var/log/prod.log
 
 ## 📝 Changelog
 
-### Version 2.0.0 (Security Hardening) - 2024-01-15
+### Version 2.0.0 (Security Hardening + Docker) - 2026-07-18
+
+**🆕 Neue Features:**
+- ✅ **Docker-Unterstützung** mit Docker Compose
+- ✅ **Multi-Container-Setup** (Symfony, React, MySQL)
+- ✅ **Frontend-Integration** mit React und Vite
+- ✅ **Dokumentation für Docker und Frontend** erweitert
 
 **🔒 Security Updates:**
 - ✅ HTMLPurifier Integration für XSS-Schutz
@@ -878,11 +1154,6 @@ tail -f var/log/prod.log
 - ✅ Rate Limiting für alle kritischen Endpoints
 - ✅ Audit Logging für Security-Events
 - ✅ Information Disclosure Prevention
-
-**🆕 Neue Features:**
-- CAPTCHA-System für Bot-Prävention
-- Health-Check Endpoint
-- Umfassende Test-Coverage (90%+)
 
 **🐛 Bug Fixes:**
 - Cookie-Handling in Tests korrigiert
@@ -903,10 +1174,10 @@ Dieses Projekt ist unter der MIT-Lizenz lizenziert.
 
 ---
 
-**Zuletzt aktualisiert:** 2024-01-15  
+**Zuletzt aktualisiert:** 2026-07-18  
 **Entwickler:** [Jens Smit](https://jenssmit.de)  
-**Security Review:** 2024-01-15  
-**Nächstes Security Audit:** 2024-04-15
+**Security Review:** 2026-07-18  
+**Nächstes Security Audit:** 2026-10-18
 
 ---
 
@@ -917,3 +1188,6 @@ Dieses Projekt ist unter der MIT-Lizenz lizenziert.
 - [PHP Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/PHP_Configuration_Cheat_Sheet.html)
 - [JWT Security Best Practices](https://tools.ietf.org/html/rfc8725)
 - [Content Security Policy Guide](https://content-security-policy.com/)
+- [Docker Dokumentation](https://docs.docker.com/)
+- [React Dokumentation](https://react.dev/)
+- [Vite Dokumentation](https://vitejs.dev/)
