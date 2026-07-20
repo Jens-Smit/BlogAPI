@@ -1,13 +1,17 @@
 # Basis-Image: PHP 8.2 mit Apache
 FROM php:8.2-apache
 
-# Abhängigkeiten installieren
+# Abhängigkeiten installieren (GD-Library Anforderungen ergänzt)
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     libzip-dev \
     libpq-dev \
-    && docker-php-ext-install pdo pdo_mysql zip
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) gd pdo pdo_mysql zip
 
 # Composer installieren
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -21,12 +25,17 @@ WORKDIR /var/www/html
 # PHP-Konfiguration kopieren
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/custom.ini
 
-# Symfony-Projekt kopieren (wird durch Volume überschrieben)
+# Composer Abhängigkeiten BEIM BUILD installieren
+COPY composer.* ./
+RUN composer install --no-scripts --no-autoloader --no-interaction
+
+# Symfony-Projekt kopieren
 COPY . .
+RUN composer dump-autoload --optimize
 
 # Apache-Konfiguration für Symfony anpassen
 RUN sed -i 's/DocumentRoot \/var\/www\/html/DocumentRoot \/var\/www\/html\/public/' /etc/apache2/sites-enabled/000-default.conf
 RUN a2enmod rewrite
 
 # Port freigeben
-EXPOSE 8000
+EXPOSE 80

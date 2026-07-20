@@ -250,9 +250,18 @@ class PostController extends AbstractController
         
         $data = json_decode($request->getContent(), true);
 
-        $title = $data['title'] ?? null;
-        $content = $data['content'] ?? null;
-        $categoryId = isset($data['categoryId']) ? (int)$data['categoryId'] : null;
+        $title = $data['title'] ?? $request->request->get('title');
+        $content = $data['content'] ?? $request->request->get('content');
+        $categoryId = isset($data['categoryId']) ? (int)$data['categoryId'] : ($request->request->get('categoryId') ? (int)$request->request->get('categoryId') : null);
+
+        $uploadedImages = $request->files->get('images', []);
+        if (!is_array($uploadedImages) && $uploadedImages instanceof UploadedFile) {
+            $uploadedImages = [$uploadedImages];
+        } elseif ($uploadedImages === null) {
+            $uploadedImages = [];
+        }
+
+        $titleImage = $request->files->get('titleImage');
 
         if (empty($title)) {
             return new JsonResponse(['error' => 'kein Titel hinterlegt'], 402);
@@ -265,7 +274,9 @@ class PostController extends AbstractController
             id: $id,
             title: $title,
             content: $content,
-            categoryId: $categoryId
+            categoryId: $categoryId,
+            titleImage: $titleImage instanceof UploadedFile ? $titleImage : null,
+            images: $uploadedImages
         );
 
         try {

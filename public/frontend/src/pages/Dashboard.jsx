@@ -14,7 +14,7 @@ const Dashboard = () => {
     const fetchPosts = async () => {
       setLoading(true);
       try {
-        const response = await api.get('/api/posts?author=me'); // Assuming there's an endpoint to get current user's posts
+        const response = await api.get('/posts?author=me'); // Assuming there's an endpoint to get current user's posts
         setPosts(response.data);
       } catch (err) {
         console.error('Fehler beim Laden der Beiträge:', err);
@@ -97,9 +97,9 @@ const Dashboard = () => {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          {post.image && (
+                          {(post.titleImage || post.image) && (
                             <img
-                              src={post.image}
+                              src={post.titleImage || post.image}
                               alt={post.title}
                               className="w-10 h-10 rounded-full mr-3"
                             />

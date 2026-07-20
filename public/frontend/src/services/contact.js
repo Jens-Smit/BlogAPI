@@ -3,7 +3,7 @@ import api from './api';
 // Send a contact form message
 const sendContactMessage = async (contactData) => {
   try {
-    const response = await api.post('/api/contact', contactData);
+    const response = await api.post('/contact', contactData);
     return response.data;
   } catch (error) {
     console.error('Fehler beim Senden der Nachricht:', error);
@@ -14,7 +14,7 @@ const sendContactMessage = async (contactData) => {
 // Get all contact messages (for admin)
 const getContactMessages = async () => {
   try {
-    const response = await api.get('/api/contact/messages');
+    const response = await api.get('/contact/messages');
     return response.data;
   } catch (error) {
     console.error('Fehler beim Abrufen der Nachrichten:', error);
@@ -25,7 +25,7 @@ const getContactMessages = async () => {
 // Get a single contact message by ID
 const getContactMessageById = async (id) => {
   try {
-    const response = await api.get(`/api/contact/messages/${id}`);
+    const response = await api.get(`/contact/messages/${id}`);
     return response.data;
   } catch (error) {
     console.error('Fehler beim Abrufen der Nachricht:', error);
@@ -36,7 +36,7 @@ const getContactMessageById = async (id) => {
 // Mark a contact message as read
 const markMessageAsRead = async (id) => {
   try {
-    const response = await api.post(`/api/contact/messages/${id}/read`);
+    const response = await api.post(`/contact/messages/${id}/read`);
     return response.data;
   } catch (error) {
     console.error('Fehler beim Markieren der Nachricht als gelesen:', error);

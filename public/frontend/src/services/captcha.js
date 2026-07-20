@@ -3,7 +3,7 @@ import api from './api';
 // Get a new captcha
 const getCaptcha = async () => {
   try {
-    const response = await api.get('/api/captcha');
+    const response = await api.get('/captcha/generate');
     return response.data;
   } catch (error) {
     console.error('Fehler beim Abrufen des Captchas:', error);
@@ -14,7 +14,7 @@ const getCaptcha = async () => {
 // Verify captcha
 const verifyCaptcha = async (id, text) => {
   try {
-    const response = await api.post('/api/captcha/verify', { id, text });
+    const response = await api.post('/captcha/verify', { id, text });
     return response.data;
   } catch (error) {
     console.error('Fehler bei der Captcha-Überprüfung:', error);

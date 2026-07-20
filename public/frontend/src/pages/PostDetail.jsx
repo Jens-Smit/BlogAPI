@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Calendar, User, Tag, ArrowLeft } from 'lucide-react';
+import { Calendar, User, ArrowLeft } from 'lucide-react';
 import api from '../services/api';
 
 const PostDetail = () => {
@@ -98,10 +98,10 @@ const PostDetail = () => {
           </header>
 
           {/* Image */}
-          {post.image && (
+          {(post.titleImage || post.image) && (
             <div className="relative h-96 overflow-hidden">
               <img
-                src={post.image}
+                src={post.titleImage || post.image}
                 alt={post.title}
                 className="w-full h-full object-cover"
               />
@@ -115,22 +115,6 @@ const PostDetail = () => {
               dangerouslySetInnerHTML={{ __html: post.content }}
             />
           </div>
-
-          {/* Tags */}
-          {post.tags?.length > 0 && (
-            <div className="p-6 pt-0">
-              <div className="flex flex-wrap gap-2">
-                {post.tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded-full text-sm"
-                  >
-                    {tag.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
         </motion.article>
       </div>
     </div>

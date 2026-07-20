@@ -13,7 +13,7 @@ const Home = () => {
     const fetchPosts = async () => {
       setLoading(true);
       try {
-        const response = await api.get('/api/posts?limit=6');
+        const response = await api.get('/posts?limit=6');
         setPosts(response.data);
       } catch (err) {
         console.error('Fehler beim Laden der Beiträge:', err);

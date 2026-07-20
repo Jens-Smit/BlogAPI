@@ -60,7 +60,7 @@ const Profile = () => {
         updateData.newPassword = formData.newPassword;
       }
 
-      const response = await api.post('/api/profile/update', updateData);
+      const response = await api.post('/profile/update', updateData);
 
       if (response.data.success) {
         setSuccess('Ihr Profil wurde erfolgreich aktualisiert!');

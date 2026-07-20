@@ -3,7 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, Loader2 } from 'lucide-react';
 import RichTextEditor from '../components/RichTextEditor';
+import CategoryModal from '../components/CategoryModal';
 import api from '../services/api';
+
+const buildMediaUrl = (value) => {
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  return `/api/public/uploads/${value}`;
+};
 
 const CreatePost = () => {
   const [formData, setFormData] = useState({
@@ -12,30 +19,28 @@ const CreatePost = () => {
     excerpt: '',
     content: '<p>Beginne hier mit dem Schreiben...</p>',
     category: '',
-    tags: [],
     image: '',
   });
   const [categories, setCategories] = useState([]);
-  const [allTags, setAllTags] = useState([]);
-  const [selectedTags, setSelectedTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [uploadedMediaFiles, setUploadedMediaFiles] = useState([]);
+  const [featuredImageFile, setFeaturedImageFile] = useState(null);
+  const [featuredImagePreview, setFeaturedImagePreview] = useState('');
+  const [featuredImageFromEditor, setFeaturedImageFromEditor] = useState(null);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [categoriesResponse, tagsResponse] = await Promise.all([
-          api.get('/api/categories'),
-          api.get('/api/tags'), // Assuming there's a tags endpoint
-        ]);
+        const categoriesResponse = await api.get('/categories');
         setCategories(categoriesResponse.data);
-        setAllTags(tagsResponse.data || []);
       } catch (err) {
-        console.error('Fehler beim Laden der Daten:', err);
-        setError('Fehler beim Laden der Kategorien oder Tags.');
+        console.error('Fehler beim Laden der Kategorien:', err);
+        setError('Fehler beim Laden der Kategorien.');
       } finally {
         setLoading(false);
       }
@@ -60,27 +65,73 @@ const CreatePost = () => {
     }
   };
 
-  const handleTagChange = (tagId) => {
-    setSelectedTags((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
-    );
+  const handleFeaturedImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFeaturedImageFile(file);
+    setFeaturedImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleFeaturedImageFromEditor = (file) => {
+    setFeaturedImageFromEditor(file);
+    if (file) {
+      setFeaturedImagePreview(URL.createObjectURL(file));
+    } else {
+      setFeaturedImagePreview('');
+    }
+  };
+
+  const refreshCategories = async () => {
+    try {
+      const categoriesResponse = await api.get('/categories');
+      setCategories(categoriesResponse.data);
+    } catch (err) {
+      console.error('Fehler beim Aktualisieren der Kategorien:', err);
+      setError('Fehler beim Aktualisieren der Kategorienliste.');
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Use featured image from editor if available, otherwise use the manually uploaded one
+    const finalFeaturedImage = featuredImageFromEditor || featuredImageFile;
+
+    if (!finalFeaturedImage && !featuredImagePreview) {
+      setError('Bitte wählen Sie ein Beitragsbild aus.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      const postData = {
-        ...formData,
-        tags: selectedTags,
-      };
+      const postData = new FormData();
+      postData.append('title', formData.title);
+      postData.append('content', formData.content);
+      postData.append('categoryId', formData.category);
+      postData.append('slug', formData.slug);
+      postData.append('excerpt', formData.excerpt || '');
 
-      const response = await api.post('/api/posts', postData);
+      if (finalFeaturedImage) {
+        postData.append('titleImage', finalFeaturedImage);
+      }
+
+      uploadedMediaFiles.forEach((file) => {
+        if (file) {
+          postData.append('images', file);
+        }
+      });
+
+      const response = await api.post('/posts', postData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
       if (response.data.id) {
-        navigate(`/blog/${response.data.slug}`);
+        navigate(`/blog/${response.data.slug || formData.slug}`);
       } else {
         setError('Fehler beim Erstellen des Beitrags.');
       }
@@ -88,6 +139,7 @@ const CreatePost = () => {
       console.error('Fehler beim Erstellen des Beitrags:', err);
       setError(
         err.response?.data?.message ||
+        err.response?.data?.error ||
         'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.'
       );
     } finally {
@@ -170,9 +222,19 @@ const CreatePost = () => {
             </div>
 
             <div>
-              <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Kategorie
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="category" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Kategorie
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(true)}
+                  className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-300 flex items-center gap-1"
+                >
+                  <Plus size={16} />
+                  <span>Neue Kategorie</span>
+                </button>
+              </div>
               <select
                 id="category"
                 name="category"
@@ -188,28 +250,29 @@ const CreatePost = () => {
                   </option>
                 ))}
               </select>
+              {categories.length === 0 && (
+                <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">
+                  Keine Kategorien verfügbar. Bitte erstellen Sie zuerst Kategorien im Admin-Bereich.
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tags
+                Beitragsbild
               </label>
-              <div className="flex flex-wrap gap-2">
-                {allTags.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => handleTagChange(tag.id)}
-                    className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                      selectedTags.includes(tag.id)
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {tag.name}
-                  </button>
-                ))}
-              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFeaturedImageChange}
+                className="input-field"
+              />
+              {featuredImagePreview && (
+                <img src={featuredImagePreview} alt="Beitragsbild Vorschau" className="mt-3 h-48 w-full rounded object-cover" />
+              )}
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                Oder wählen Sie ein Bild aus dem RichTextEditor als Featured Image
+              </p>
             </div>
 
             <div>
@@ -219,6 +282,8 @@ const CreatePost = () => {
               <RichTextEditor
                 content={formData.content}
                 onChange={(content) => setFormData((prev) => ({ ...prev, content }))}
+                onMediaFilesChange={setUploadedMediaFiles}
+                onFeaturedImageChange={handleFeaturedImageFromEditor}
               />
             </div>
 
@@ -244,6 +309,12 @@ const CreatePost = () => {
           </form>
         </motion.div>
       </div>
+
+      <CategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onCategoryCreated={refreshCategories}
+      />
     </div>
   );
 };

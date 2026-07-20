@@ -1,26 +1,19 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  root: resolve(__dirname, 'src'),
-  build: {
-    outDir: resolve(__dirname, '../../public/frontend'),
-    emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'src/index.jsx'),
-      },
-    },
-  },
+  // 'root' wurde entfernt. Vite nutzt jetzt standardmäßig den Ordner, in dem die index.html liegt.
   server: {
     port: 3000,
+    // proxy für Docker angepasst:
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://backend', // Hier MUSS der Container-Name stehen, nicht localhost!
         changeOrigin: true,
       },
     },
   },
+  // Das Build-Objekt wurde vorerst entfernt, da Vite standardmäßig 
+  // einen sauberen 'dist'-Ordner im aktuellen Verzeichnis erstellt.
 });

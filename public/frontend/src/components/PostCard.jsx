@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Calendar, User, Tag } from 'lucide-react';
+import { Calendar, User } from 'lucide-react';
 
 const PostCard = ({ post }) => {
   const fallbackImage = 'https://via.placeholder.com/400x250?text=No+Image';
@@ -16,7 +16,7 @@ const PostCard = ({ post }) => {
     >
       <div className="relative h-48 overflow-hidden">
         <img
-          src={post.image || fallbackImage}
+          src={post.titleImage || post.image || fallbackImage}
           alt={post.title}
           className="w-full h-full object-cover"
           onError={(e) => {
@@ -60,18 +60,6 @@ const PostCard = ({ post }) => {
           >
             Weiterlesen
           </Link>
-          {post.tags?.length > 0 && (
-            <div className="flex space-x-2">
-              {post.tags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-xs"
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </motion.article>

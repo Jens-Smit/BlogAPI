@@ -5,9 +5,9 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Abhängigkeiten kopieren (direkt aus dem aktuellen Verzeichnis)
-COPY package.json package-lock.json ./
+COPY package*.json ./
 
-# npm install ausführen
+# npm install ausführen (passiert jetzt beim Build)
 RUN npm install
 
 # Projekt kopieren

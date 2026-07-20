@@ -22,6 +22,7 @@ const ContactForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setError('');
     setSuccess('');
 
@@ -33,7 +34,7 @@ const ContactForm = () => {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/contact', {
+      const response = await api.post('/contact', {
         name: formData.name,
         email: formData.email,
         message: formData.message,
@@ -132,8 +133,8 @@ const ContactForm = () => {
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full btn-primary flex items-center justify-center gap-2"
+          disabled={loading || !captchaVerified}
+          className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {loading ? (
             <>

@@ -9,30 +9,21 @@ const Blog = () => {
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({
     category: '',
-    tag: '',
     search: '',
   });
   const [categories, setCategories] = useState([]);
-  const [tags, setTags] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
         // Fetch posts
-        const postsResponse = await api.get('/api/posts', { params: filters });
+        const postsResponse = await api.get('/posts', { params: filters });
         setPosts(postsResponse.data);
 
         // Fetch categories
-        const categoriesResponse = await api.get('/api/categories');
+        const categoriesResponse = await api.get('/categories');
         setCategories(categoriesResponse.data);
-
-        // Fetch tags (assuming there's an endpoint for tags)
-        // If not, you can extract tags from posts
-        const allTags = postsResponse.data.flatMap(post => post.tags || []);
-        const uniqueTags = Array.from(new Set(allTags.map(tag => tag.name)))
-          .map(name => ({ name }));
-        setTags(uniqueTags);
       } catch (err) {
         console.error('Fehler beim Laden der Daten:', err);
         setError('Fehler beim Laden der Daten. Bitte versuchen Sie es später erneut.');
@@ -80,7 +71,7 @@ const Blog = () => {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Filter
           </h2>
-          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Suche
@@ -111,26 +102,6 @@ const Blog = () => {
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="tag" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Tag
-              </label>
-              <select
-                id="tag"
-                name="tag"
-                value={filters.tag}
-                onChange={handleFilterChange}
-                className="input-field"
-              >
-                <option value="">Alle Tags</option>
-                {tags.map((tag, index) => (
-                  <option key={index} value={tag.name}>
-                    {tag.name}
                   </option>
                 ))}
               </select>

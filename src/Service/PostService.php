@@ -132,7 +132,7 @@ class PostService
         
         // Aktualisiere Content
         if ($dto->content !== null) {
-            $post->setContent($dto->content);
+            $post->setContent($this->sanitizeContent($dto->content));
         }
        
         // Aktualisiere Kategorie
@@ -142,6 +142,27 @@ class PostService
                 throw new \InvalidArgumentException("Kategorie mit ID {$dto->categoryId} nicht gefunden.");
             }
             $post->setCategory($category);
+        }
+
+        if ($dto->titleImage instanceof UploadedFile) {
+            if ($post->getTitleImage()) {
+                $this->deleteFile($post->getTitleImage());
+            }
+
+            $post->setTitleImage($this->uploadFile($dto->titleImage));
+        }
+
+        if (!empty($dto->images)) {
+            $existingImages = $post->getImages() ?? [];
+            $uploadedImages = [];
+
+            foreach ($dto->images as $uploadedImage) {
+                if ($uploadedImage instanceof UploadedFile) {
+                    $uploadedImages[] = $this->uploadFile($uploadedImage);
+                }
+            }
+
+            $post->setImages(array_values(array_merge($existingImages, $uploadedImages)));
         }
 
         $this->em->flush();

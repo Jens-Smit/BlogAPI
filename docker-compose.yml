@@ -33,10 +33,11 @@ services:
       - ./:/var/www/html
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
     ports:
-      - "8000:8000"
+      - "8000:80"
     networks:
       - blogapi_network
-    command: sh -c "composer install && php bin/console doctrine:database:create && php bin/console doctrine:migrations:migrate && symfony serve --no-tls"
+    # HIER KORRIGIERT: 'composer install' entfernt. 
+    command: sh -c "php bin/console doctrine:database:create --if-not-exists && php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration && apache2-foreground"
 
   # React (Frontend) Container
   frontend:
@@ -48,12 +49,14 @@ services:
       - backend
     volumes:
       - ./public/frontend:/app
-      - /app/node_modules
+      # Dieses Volume verhindert, dass dein lokales (leeres) node_modules den Container überschreibt
+      - /app/node_modules 
     ports:
       - "3000:3000"
     networks:
       - blogapi_network
-    command: sh -c "npm install && npm run dev"
+    # HIER KORRIGIERT: 'npm install' entfernt und Vite für Aufrufe von außen geöffnet
+    command: sh -c "npm run dev -- --host 0.0.0.0"
 
 # Volumes für MySQL-Daten
 volumes:

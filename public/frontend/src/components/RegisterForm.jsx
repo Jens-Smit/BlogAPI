@@ -15,6 +15,7 @@ const RegisterForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
 
@@ -28,6 +29,7 @@ const RegisterForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!captchaVerified) {
       setError('Bitte bestätigen Sie das Captcha.');
@@ -42,24 +44,25 @@ const RegisterForm = () => {
     setLoading(true);
 
     try {
-      const response = await api.post('/api/register', {
+      const response = await api.post('/register', {
         username: formData.username,
         email: formData.email,
         password: formData.password,
       });
 
-      if (response.data.success) {
-        navigate('/login');
+      const message = response.data.message || response.data.error || 'Registrierung erfolgreich.';
+
+      if (response.status >= 200 && response.status < 300) {
+        setSuccess(message);
+        navigate('/login', { replace: true, state: { successMessage: message } });
       } else {
-        setError(
-          response.data.message ||
-          'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.'
-        );
+        setError(message);
       }
     } catch (err) {
       console.error('Registrierungsfehler:', err);
       setError(
         err.response?.data?.message ||
+        err.response?.data?.error ||
         'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.'
       );
     } finally {
@@ -80,6 +83,10 @@ const RegisterForm = () => {
 
       {error && (
         <p className="text-red-600 dark:text-red-400 text-sm mb-4 text-center">{error}</p>
+      )}
+
+      {success && (
+        <p className="text-green-600 dark:text-green-400 text-sm mb-4 text-center">{success}</p>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -165,8 +172,8 @@ const RegisterForm = () => {
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full btn-primary flex items-center justify-center gap-2"
+          disabled={loading || !captchaVerified}
+          className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <>
