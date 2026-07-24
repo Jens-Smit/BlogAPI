@@ -204,6 +204,31 @@ class PostControllerTest extends WebTestCase
         $this->assertSame($post->getId(), (int)$data['id']);
     }
 
+    public function testGetPostByIdAcceptsNumericIdentifier(): void
+    {
+        $user = $this->createAndPersistUser();
+        $category = $this->createAndPersistCategory('Test Category');
+
+        $post = new Post();
+        $post->setTitle('Numeric Post');
+        $post->setSlug('numeric-post');
+        $post->setContent('Numeric Content');
+        $post->setAuthor($user);
+        $post->setCategory($category);
+        $post->setCreatedAt(new \DateTime());
+        $this->em->persist($post);
+        $this->em->flush();
+
+        $this->client->loginUser($user);
+        $this->client->request('GET', '/api/posts/' . $post->getId());
+
+        $this->assertResponseIsSuccessful();
+
+        $data = json_decode($this->client->getResponse()->getContent(), true);
+        $this->assertArrayHasKey('id', $data);
+        $this->assertSame($post->getId(), (int) $data['id']);
+    }
+
     public function testGetPostByIdReturns404WhenNotFound(): void
     {
         $this->client->request('GET', '/api/posts/99999');
@@ -265,6 +290,31 @@ class PostControllerTest extends WebTestCase
         $post = $this->em->getRepository(Post::class)->find($data['id']);
         $this->assertNotNull($post);
         $this->assertSame($category->getId(), $post->getCategory()->getId());
+    }
+
+    public function testCreatePostFailsWithoutAuthentication(): void
+    {
+        $tmp = $this->createMockUploadedFile('title.png', 'image/png');
+        $uploaded = new UploadedFile(
+            $tmp,
+            'title.png',
+            'image/png',
+            null,
+            true
+        );
+
+        $this->client->request(
+            'POST',
+            '/api/posts',
+            ['title' => 'Unautorisierter Post', 'content' => 'Inhalt'],
+            ['titleImage' => $uploaded],
+            ['CONTENT_TYPE' => 'multipart/form-data']
+        );
+
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $this->client->getResponse()->getStatusCode());
+
+        $data = json_decode($this->client->getResponse()->getContent(), true);
+        $this->assertSame('Authentifizierung erforderlich.', $data['error']);
     }
 
     public function testCreatePostFailsWithMissingTitle(): void

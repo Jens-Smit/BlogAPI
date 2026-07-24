@@ -1,17 +1,9 @@
 import api from './api';
 
-// Check if user is authenticated
 const isAuthenticated = () => {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  const hasStoredToken = !!localStorage.getItem('jwt_token');
-  const hasAuthCookie = document.cookie
-    .split(';')
-    .some((cookie) => cookie.trim().startsWith('BEARER=') || cookie.trim().startsWith('refresh_token='));
-
-  return hasStoredToken || hasAuthCookie;
+  if (typeof window === 'undefined') return false;
+  // Da die Cookies jetzt HttpOnly sind, prüfen wir ein Flag
+  return localStorage.getItem('is_logged_in') === 'true';
 };
 
 // Get current user data
@@ -29,29 +21,26 @@ const getCurrentUser = async () => {
 const login = async (email, password) => {
   try {
     const response = await api.post('/login', { email, password });
-    if (response.data.token) {
-      localStorage.setItem('jwt_token', response.data.token);
-      if (response.data.refresh_token) {
-        localStorage.setItem('refresh_token', response.data.refresh_token);
-      }
+    if (response.status === 200) {
+      // Das Backend hat nun die HttpOnly-Cookies gesetzt.
+      // Wir setzen nur ein Flag für das Frontend.
+      localStorage.setItem('is_logged_in', 'true');
       return response.data;
     }
-    throw new Error('Ungültige Anmeldedaten');
   } catch (error) {
     console.error('Login-Fehler:', error);
-    throw error;
+    throw new Error('Ungültige Anmeldedaten');
   }
 };
 
 // Logout user
 const logout = async () => {
   try {
-    await api.post('/logout');
+    await api.post('/logout'); // Das Backend löscht die Cookies
   } catch (error) {
     console.error('Logout-Fehler:', error);
   } finally {
-    localStorage.removeItem('jwt_token');
-    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('is_logged_in');
     window.location.href = '/login';
   }
 };

@@ -13,7 +13,7 @@ security:
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
-        
+
         # 2. Refresh Token Firewall (WICHTIG: Muss VOR der API-Firewall stehen!)
         refresh:
             pattern: ^/api/token/refresh$
@@ -21,19 +21,22 @@ security:
             provider: app_user_provider
             refresh_jwt:
                 check_path: /api/token/refresh
-                
-        
-        # 3. Haupt-API Firewall
+
+        # 2.5. Öffentliche API-Endpunkte (keine Authentifizierung)
+        public_api:
+            pattern: ^/api/(captcha|contact|login|register|password/request-reset|password/reset|doc|posts|categories|health)
+            stateless: true
+            security: false
+
+        # 3. Haupt-API Firewall (geschützte Routen)
         api:
             pattern: ^/api
             stateless: true
             provider: app_user_provider
-            
+
             # Custom Authenticators für JWT-basierte Authentifizierung
             custom_authenticators:
                 - App\Security\JwtTokenAuthenticator
-            
-           
 
     access_control:
         # ========================================
@@ -47,25 +50,27 @@ security:
         - { path: ^/api/login$, roles: PUBLIC_ACCESS }
         - { path: ^/api/register$, roles: PUBLIC_ACCESS, methods: [POST] }
         - { path: ^/api/token/refresh$, roles: PUBLIC_ACCESS }
-        
+
         # Passwort-Reset
         - { path: ^/api/password/request-reset$, roles: PUBLIC_ACCESS }
         - { path: ^/api/password/reset$, roles: PUBLIC_ACCESS }
-        
+
         # Kontaktformular & CAPTCHA
         - { path: ^/api/contact$, roles: PUBLIC_ACCESS }
         - { path: ^/api/captcha, roles: PUBLIC_ACCESS }
-        
-        # Öffentlicher Lesezugriff (GET) auf Posts
+
+        # Öffentlicher Lesezugriff (GET) auf Posts (IDs und Slugs)
         - { path: ^/api/posts$, roles: PUBLIC_ACCESS, methods: [GET] }
+        # Erlaubt GET-Zugriff auf einzelne Posts per Slug (z.B. /api/posts/my-slug)
+        - { path: ^/api/posts/[^/]+$, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/posts/\d+$, roles: PUBLIC_ACCESS, methods: [GET] }
-        
+
         # Öffentlicher Lesezugriff (GET) auf Kategorien
         - { path: ^/api/categories, roles: PUBLIC_ACCESS, methods: [GET] }
-        
+
         # Health-Check (falls vorhanden)
         - { path: ^/health$, roles: PUBLIC_ACCESS }
-        
+
         # ========================================
         # GESCHÜTZTE ROUTEN (Authentifizierung erforderlich)
         # ========================================
@@ -76,19 +81,19 @@ security:
         - { path: ^/api/posts$, roles: IS_AUTHENTICATED_FULLY, methods: [POST] }
         - { path: ^/api/posts/\d+$, roles: IS_AUTHENTICATED_FULLY, methods: [PUT, PATCH, DELETE] }
         - { path: ^/api/posts/upload$, roles: IS_AUTHENTICATED_FULLY, methods: [POST] }
-        
+
         # Kategorien: Schreib-, Update- und Löschzugriff
         - { path: ^/api/categories, roles: IS_AUTHENTICATED_FULLY, methods: [POST, PUT, PATCH, DELETE] }
-        
+
         # Passwort ändern (nur für authentifizierte Benutzer)
         - { path: ^/api/password/change$, roles: IS_AUTHENTICATED_FULLY }
-        
+
         # Session-Verwaltung (falls implementiert)
         - { path: ^/api/sessions, roles: IS_AUTHENTICATED_FULLY }
-        
+
         # Logout
         - { path: ^/api/logout$, roles: IS_AUTHENTICATED_FULLY }
-        
+
         # ========================================
         # FALLBACK: Alle anderen API-Routen sichern
         # ========================================

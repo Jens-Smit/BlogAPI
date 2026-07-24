@@ -3,12 +3,11 @@ lexik_jwt_authentication:
     public_key: '%kernel.project_dir%/config/jwt/public.pem'
     pass_phrase: '%env(JWT_PASSPHRASE)%'
     token_ttl: 3600 # Lebensdauer des Tokens in Sekunden (z.B. 1 Stunde)
-
-    # WICHTIG: Token Extractor Konfiguration
+    
+     # WICHTIG: Token Extractor Konfiguration
     token_extractors:
         authorization_header:
             enabled: false # Deaktivieren des Headers
         cookie:
             enabled: true # Aktivieren der Cookie-Extraktion
             name: BEARER # Der Name des Cookies, den wir im AuthController gesetzt haben
- 

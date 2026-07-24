@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, Edit3, Trash2, Eye, Loader2 } from 'lucide-react';
 import api from '../services/api';
+import config from '../config';
 
 const Dashboard = () => {
   const [posts, setPosts] = useState([]);
@@ -32,7 +33,7 @@ const Dashboard = () => {
 
     setDeletingId(id);
     try {
-      await api.delete(`/api/posts/${id}`);
+      await api.delete(`/posts/${id}`);
       setPosts((prev) => prev.filter((post) => post.id !== id));
     } catch (err) {
       console.error('Fehler beim Löschen des Beitrags:', err);
@@ -99,7 +100,7 @@ const Dashboard = () => {
                         <div className="flex items-center">
                           {(post.titleImage || post.image) && (
                             <img
-                              src={post.titleImage || post.image}
+                              src={config.getUploadUrl(post.titleImage || post.image)}
                               alt={post.title}
                               className="w-10 h-10 rounded-full mr-3"
                             />

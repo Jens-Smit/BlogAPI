@@ -8,51 +8,32 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('jwt_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+// Der alte Request-Interceptor wird gelöscht, da der Browser
+// die Autorisierung via Cookie nun selbst übernimmt.
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
+    // Refresh-Logik
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          const response = await axios.post('/token/refresh', {}, {
-            withCredentials: true,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          });
+        // Das Backend prüft nun auch hier den HttpOnly Refresh-Cookie
+        await axios.post('/api/token/refresh', {}, {
+          withCredentials: true,
+          headers: { 'Content-Type': 'application/json' },
+        });
 
-          const newToken = response.data.token;
-          localStorage.setItem('jwt_token', newToken);
-
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          return api(originalRequest);
-        }
+        // Wenn der Refresh klappt, Request einfach nochmal absenden
+        return api(originalRequest);
       } catch (refreshError) {
-        localStorage.removeItem('jwt_token');
-        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('is_logged_in');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
-
     return Promise.reject(error);
   }
 );

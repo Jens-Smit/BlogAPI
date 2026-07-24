@@ -5,6 +5,7 @@ import { Plus, Loader2 } from 'lucide-react';
 import RichTextEditor from '../components/RichTextEditor';
 import CategoryModal from '../components/CategoryModal';
 import api from '../services/api';
+import { createPost } from '../services/posts';
 
 const buildMediaUrl = (value) => {
   if (!value) return '';
@@ -124,14 +125,10 @@ const CreatePost = () => {
         }
       });
 
-      const response = await api.post('/posts', postData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const data = await createPost(postData);
 
-      if (response.data.id) {
-        navigate(`/blog/${response.data.slug || formData.slug}`);
+      if (data.id) {
+        navigate(`/blog/${data.slug || formData.slug}`);
       } else {
         setError('Fehler beim Erstellen des Beitrags.');
       }
@@ -206,20 +203,7 @@ const CreatePost = () => {
               />
             </div>
 
-            <div>
-              <label htmlFor="excerpt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Auszug
-              </label>
-              <textarea
-                id="excerpt"
-                name="excerpt"
-                value={formData.excerpt}
-                onChange={handleChange}
-                placeholder="Kurzer Auszug des Beitrags..."
-                rows={3}
-                className="input-field resize-none"
-              />
-            </div>
+            
 
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -266,6 +250,7 @@ const CreatePost = () => {
                 accept="image/*"
                 onChange={handleFeaturedImageChange}
                 className="input-field"
+                style={{ display: "none" }}
               />
               {featuredImagePreview && (
                 <img src={featuredImagePreview} alt="Beitragsbild Vorschau" className="mt-3 h-48 w-full rounded object-cover" />

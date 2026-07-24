@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Calendar, User, ArrowLeft } from 'lucide-react';
 import api from '../services/api';
+import config from '../config';
 
 const PostDetail = () => {
   const { slug } = useParams();
@@ -14,7 +15,7 @@ const PostDetail = () => {
     const fetchPost = async () => {
       setLoading(true);
       try {
-        const response = await api.get(`/api/posts/${slug}`);
+        const response = await api.get(`/posts/${slug}`);
         setPost(response.data);
       } catch (err) {
         console.error('Fehler beim Laden des Beitrags:', err);
@@ -101,7 +102,7 @@ const PostDetail = () => {
           {(post.titleImage || post.image) && (
             <div className="relative h-96 overflow-hidden">
               <img
-                src={post.titleImage || post.image}
+                src={config.getUploadUrl(post.titleImage || post.image)}
                 alt={post.title}
                 className="w-full h-full object-cover"
               />

@@ -37,9 +37,16 @@ class PostService
     private function sanitizeContent(string $content): string
     {
         $config = \HTMLPurifier_Config::createDefault();
-        $config->set('HTML.Allowed', 'p,br,strong,em,u,a[href],img[src|alt],h2,h3,ul,ol,li');
+        $config->set('HTML.Allowed', 'p,br,strong,em,u,a[href],img[src|alt|style],h2,h3,ul,ol,li');
         $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true]);
-        
+
+        // Erstelle einen spezifischen Cache-Ordner im Symfony var/cache Verzeichnis
+        $cachePath = $this->projectDir . '/var/cache/htmlpurifier';
+        if (!is_dir($cachePath)) {
+            mkdir($cachePath, 0777, true);
+        }
+
+        $config->set('Cache.SerializerPath', $cachePath);
         $purifier = new \HTMLPurifier($config);
         return $purifier->purify($content);
     }
@@ -99,7 +106,7 @@ class PostService
                 $newFilename = $uploadedFileMap[$originalFilename];
                 $placeholder = "[{$placeholderId}]";
                 $mediaHtml = sprintf(
-                    '<img src="%s/api/public/uploads/%s" alt="%s">',
+                    '<img src="%s/api/uploads/%s" alt="%s">',
                     $this->apiUrl,
                     $newFilename,
                     htmlspecialchars($originalFilename)

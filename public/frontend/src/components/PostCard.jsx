@@ -2,9 +2,16 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Calendar, User } from 'lucide-react';
+import config from '../config';
 
 const PostCard = ({ post }) => {
   const fallbackImage = 'https://via.placeholder.com/400x250?text=No+Image';
+
+  const stripHtml = (value = '') => value.replace(/<[^>]+>/g, '');
+  const previewText = post.excerpt
+    ? stripHtml(post.excerpt)
+    : `${stripHtml(post.content || '').substring(0, 150)}...`;
+  const previewHtml = post.excerpt && /<[^>]+>/.test(post.excerpt) ? post.excerpt : null;
 
   return (
     <motion.article
@@ -16,7 +23,7 @@ const PostCard = ({ post }) => {
     >
       <div className="relative h-48 overflow-hidden">
         <img
-          src={post.titleImage || post.image || fallbackImage}
+          src={config.getUploadUrl(post.titleImage || post.image)}
           alt={post.title}
           className="w-full h-full object-cover"
           onError={(e) => {
@@ -49,9 +56,15 @@ const PostCard = ({ post }) => {
           {post.title}
         </h3>
 
-        <p className="text-gray-600 dark:text-gray-400 mb-4 text-sm line-clamp-3">
-          {post.excerpt || post.content.substring(0, 150) + '...'}
-        </p>
+        <div className="text-gray-600 dark:text-gray-400 mb-4 text-sm line-clamp-3">
+          {previewHtml ? (
+            <div
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          ) : (
+            <p>{previewText}</p>
+          )}
+        </div>
 
         <div className="flex justify-between items-center">
           <Link

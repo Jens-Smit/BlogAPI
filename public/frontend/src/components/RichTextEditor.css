@@ -154,10 +154,65 @@
   line-height: 1.6;
 }
 
+/* Text alignment styles */
+.rich-text-editor p[data-align="left"],
+.rich-text-editor h1[data-align="left"],
+.rich-text-editor h2[data-align="left"],
+.rich-text-editor h3[data-align="left"] {
+  text-align: left;
+}
+
+.rich-text-editor p[data-align="center"],
+.rich-text-editor h1[data-align="center"],
+.rich-text-editor h2[data-align="center"],
+.rich-text-editor h3[data-align="center"] {
+  text-align: center;
+}
+
+.rich-text-editor p[data-align="right"],
+.rich-text-editor h1[data-align="right"],
+.rich-text-editor h2[data-align="right"],
+.rich-text-editor h3[data-align="right"] {
+  text-align: right;
+}
+
+/* Media alignment styles */
+.rich-text-editor img[data-align="left"],
+.rich-text-editor video[data-align="left"],
+.rich-text-editor figure[data-align="left"] {
+  display: block;
+  margin-left: 0;
+  margin-right: auto;
+  text-align: left;
+}
+
+.rich-text-editor img[data-align="center"],
+.rich-text-editor video[data-align="center"],
+.rich-text-editor figure[data-align="center"] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.rich-text-editor img[data-align="right"],
+.rich-text-editor video[data-align="right"],
+.rich-text-editor figure[data-align="right"] {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+  text-align: right;
+}
+
 /* Image styling within editor */
 .rich-text-editor img {
   border-radius: 0.5rem;
   margin: 1rem 0;
+}
+
+.rich-text-editor img[style],
+.rich-text-editor video[style] {
+  display: block;
 }
 
 /* RichTextEditor content specific styling */

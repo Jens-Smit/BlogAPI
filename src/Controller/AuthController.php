@@ -22,6 +22,7 @@ use Gesdinet\JWTRefreshTokenBundle\Generator\RefreshTokenGeneratorInterface;
 use Gesdinet\JWTRefreshTokenBundle\Model\RefreshTokenManagerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Psr\Log\LoggerInterface;
 
 class AuthController extends AbstractController
 {
@@ -38,6 +39,7 @@ class AuthController extends AbstractController
         private readonly RateLimiterFactory $loginLimiter,
         #[\Symfony\Component\DependencyInjection\Attribute\Autowire(service: 'limiter.password_reset_limiter')]
         private readonly RateLimiterFactory $passwordResetLimiter,
+        private readonly LoggerInterface $logger,
     ) {}
 
     #[Route("/api/login", name: "api_login", methods: ["POST"])]
@@ -104,19 +106,53 @@ class AuthController extends AbstractController
             return new JsonResponse(['error' => 'Ungültige Anmeldedaten.'], 401);
         }
 
-        $accessToken = $this->jwtManager->create($user);
+        // Create JWT token - use username to match UserProvider configuration
+        $accessToken = $this->jwtManager->createFromPayload($user, ['username' => $user->getEmail()]);
         $refreshToken = $this->refreshTokenGenerator->createForUserWithTtl($user, 604800);
         $this->refreshTokenManager->save($refreshToken);
 
         $accessTokenCookie = new Cookie('BEARER', $accessToken, time() + 3600, '/', null, false, true, false, 'lax');
         $refreshTokenCookie = new Cookie('refresh_token', $refreshToken->getRefreshToken(), time() + 604800, '/', null, false, true, false, 'lax');
 
+        // DEBUG: Log cookie details
+        $this->logger->debug('Setting auth cookies', [
+            'access_token_cookie' => [
+                'name' => 'BEARER',
+                'domain' => $accessTokenCookie->getDomain(),
+                'path' => $accessTokenCookie->getPath(),
+                'secure' => $accessTokenCookie->isSecure(),
+                'httpOnly' => $accessTokenCookie->isHttpOnly(),
+                'sameSite' => $accessTokenCookie->getSameSite()
+            ],
+            'refresh_token_cookie' => [
+                'name' => 'refresh_token',
+                'domain' => $refreshTokenCookie->getDomain(),
+                'path' => $refreshTokenCookie->getPath(),
+                'secure' => $refreshTokenCookie->isSecure(),
+                'httpOnly' => $refreshTokenCookie->isHttpOnly(),
+                'sameSite' => $refreshTokenCookie->getSameSite()
+            ],
+            'user_id' => $user->getId(),
+            'user_email' => $user->getUserIdentifier()
+        ]);
+
         $response = new JsonResponse([
             'message' => 'Login erfolgreich.',
-            'user' => ['email' => $user->getUserIdentifier()]
+            'user' => [
+                'email' => $user->getUserIdentifier(),
+                'username' => $user->getUsername()
+            ]
         ], 200);
         $response->headers->setCookie($accessTokenCookie);
         $response->headers->setCookie($refreshTokenCookie);
+
+        // DEBUG: Log response headers
+        $this->logger->debug('Login response headers', [
+            'cookies' => $response->headers->getCookies(),
+            'user_agent' => $request->headers->get('User-Agent'),
+            'referer' => $request->headers->get('Referer'),
+            'host' => $request->getHost()
+        ]);
 
         return $response;
     }
@@ -160,13 +196,14 @@ class AuthController extends AbstractController
     #[OA\Post(
         path: "/api/register",
         summary: "Benutzer registrieren",
-        description: "Registriert einen neuen Benutzer mit E-Mail und Passwort.",
+        description: "Registriert einen neuen Benutzer mit Benutzername, E-Mail und Passwort.",
         tags: ["Authentication"],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ["email","password"],
+                required: ["username","email","password"],
                 properties: [
+                    new OA\Property(property: "username", type: "string"),
                     new OA\Property(property: "email", type: "string", format: "email"),
                     new OA\Property(property: "password", type: "string", format: "password")
                 ]
@@ -181,14 +218,14 @@ class AuthController extends AbstractController
     public function register(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-        if (!is_array($data) || !isset($data['email'], $data['password'])) {
-            return new JsonResponse(['error' => 'E-Mail und Passwort sind erforderlich.'], 400);
+        if (!is_array($data) || !isset($data['username'], $data['email'], $data['password'])) {
+            return new JsonResponse(['error' => 'Benutzername, E-Mail und Passwort sind erforderlich.'], 400);
         }
         if (strlen($data['password']) < 8) {
             return new JsonResponse(['error' => 'Passwort muss mindestens 8 Zeichen lang sein.'], 400);
         }
 
-        $dto = new RegisterRequestDTO($data['email'], $data['password']);
+        $dto = new RegisterRequestDTO($data['username'], $data['email'], $data['password']);
 
         try {
             $this->authService->register($dto);
@@ -322,5 +359,108 @@ class AuthController extends AbstractController
         } catch (\Throwable) {
             return new JsonResponse(['error' => 'Fehler beim Ändern des Passworts'], 500);
         }
+    }
+
+    #[Route('/api/me', name: 'api_me', methods: ['GET'])]
+    #[OA\Get(
+        path: "/api/me",
+        summary: "Aktuellen Benutzer abrufen",
+        description: "Gibt die Daten des aktuell authentifizierten Benutzers zurück.",
+        tags: ["Authentication"],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: "Benutzerdaten erfolgreich abgerufen",
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: "id", type: "integer"),
+                        new OA\Property(property: "email", type: "string"),
+                        new OA\Property(property: "username", type: "string"),
+                        new OA\Property(property: "roles", type: "array", items: new OA\Items(type: "string"))
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: "Nicht authentifiziert")
+        ]
+    )]
+    public function getCurrentUser(): JsonResponse
+    {
+        $user = $this->getUser();
+
+        // DEBUG: Log authentication status
+        $this->logger->debug('getCurrentUser authentication check', [
+            'user_present' => $user !== null,
+            'user_class' => $user ? get_class($user) : 'null',
+            'request_cookies' => array_keys($this->container->get('request_stack')->getCurrentRequest()->cookies->all()),
+            'request_uri' => $this->container->get('request_stack')->getCurrentRequest()->getUri()
+        ]);
+
+        if (!$user) {
+            $this->logger->debug('getCurrentUser failed - no authenticated user');
+            return new JsonResponse(['error' => 'Nicht authentifiziert.'], 401);
+        }
+
+        // Cast to User entity to access getId() method
+        if (!$user instanceof \App\Entity\User) {
+            $this->logger->debug('getCurrentUser failed - invalid user type', [
+                'user_class' => get_class($user)
+            ]);
+            return new JsonResponse(['error' => 'Ungültiger Benutzertyp.'], 401);
+        }
+
+        $this->logger->debug('getCurrentUser success', [
+            'user_id' => $user->getId(),
+            'user_email' => $user->getUserIdentifier(),
+            'user_username' => $user->getUsername(),
+            'user_roles' => $user->getRoles()
+        ]);
+
+        return new JsonResponse([
+            'id' => $user->getId(),
+            'email' => $user->getUserIdentifier(),
+            'username' => $user->getUsername(),
+            'roles' => $user->getRoles()
+        ], 200);
+    }
+    #[Route("/api/token/refresh", name: "api_token_refresh", methods: ["POST"])]
+    #[OA\Post(
+        path: "/api/token/refresh",
+        summary: "Access-Token erneuern",
+        description: "Erneuert den BEARER Access-Token anhand des HttpOnly Refresh-Token Cookies.",
+        tags: ["Authentication"],
+        responses: [
+            new OA\Response(response: 200, description: "Token erfolgreich erneuert"),
+            new OA\Response(response: 401, description: "Ungültiger oder fehlender Refresh-Token")
+        ]
+    )]
+    public function refresh(Request $request): JsonResponse
+    {
+        $refreshTokenString = $request->cookies->get('refresh_token');
+        if (!$refreshTokenString) {
+            return new JsonResponse(['error' => 'Refresh-Token Cookie nicht gefunden.'], 401);
+        }
+
+        $refreshToken = $this->refreshTokenManager->get($refreshTokenString);
+        if (!$refreshToken || $refreshToken->getValid() < new \DateTime()) {
+            return new JsonResponse(['error' => 'Ungültiger oder abgelaufener Refresh-Token.'], 401);
+        }
+
+        
+        $Username = $refreshToken->getUsername();
+        $user= $this->userRepository->findOneBy(['email' => $Username]);
+        if (!$user) {
+            return new JsonResponse(['error' => 'Benutzer nicht gefunden.'], 401);
+        }
+
+        // Neuen Access-Token generieren (identisch zur Login-Logik)
+        $accessToken = $this->jwtManager->createFromPayload($user, ['username' => $user->getEmail()]);
+        
+        // Neuen BEARER-Cookie erstellen
+        $accessTokenCookie = new Cookie('BEARER', $accessToken, time() + 3600, '/', null, false, true, false, 'lax');
+
+        $response = new JsonResponse(['message' => 'Token erfolgreich erneuert.']);
+        $response->headers->setCookie($accessTokenCookie);
+
+        return $response;
     }
 }

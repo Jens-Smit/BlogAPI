@@ -20,7 +20,7 @@ class AuthService
 
     public function register(RegisterRequestDTO $dto): void
     {
-       
+
         $userRepo = $this->em->getRepository(User::class);
         $existingUser = $userRepo->findOneBy(['email' => $dto->email]);
 
@@ -29,6 +29,7 @@ class AuthService
         }
 
         $user = new User();
+        $user->setUsername($dto->username);
         $user->setEmail($dto->email);
         $hashedPassword = $this->passwordHasher->hashPassword($user, $dto->password);
         $user->setPassword($hashedPassword);

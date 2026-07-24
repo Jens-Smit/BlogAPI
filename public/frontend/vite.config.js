@@ -7,12 +7,13 @@ export default defineConfig({
   server: {
     port: 3000,
     // proxy für Docker angepasst:
-    proxy: {
-      '/api': {
-        target: 'http://backend', // Hier MUSS der Container-Name stehen, nicht localhost!
-        changeOrigin: true,
+      proxy: {
+        '/api': {
+          target: 'http://backend:80', // Port explizit angeben für Docker-Netzwerk
+          changeOrigin: true,
+          // rewrite entfernt, da Backend /api Präfix erwartet
+        },
       },
-    },
   },
   // Das Build-Objekt wurde vorerst entfernt, da Vite standardmäßig 
   // einen sauberen 'dist'-Ordner im aktuellen Verzeichnis erstellt.

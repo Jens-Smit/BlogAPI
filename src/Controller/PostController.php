@@ -63,16 +63,16 @@ class PostController extends AbstractController
         return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
-    #[Route('/api/posts/{slug}', name: 'get_post_by_id', methods: ['GET'])]
+    #[Route('/api/posts/{identifier}', name: 'get_post_by_id', methods: ['GET'])]
     #[OA\Get(
-        path: "/api/posts/{slug}",
-        summary: "Einen Blogpost per Slug abrufen",
+        path: "/api/posts/{identifier}",
+        summary: "Einen Blogpost per Slug oder ID abrufen",
         tags: ["Posts"],
         parameters: [
             new OA\Parameter(
-                name: "slug",
+                name: "identifier",
                 in: "path",
-                description: "Slug des Blogposts",
+                description: "Slug oder ID des Blogposts",
                 required: true,
                 schema: new OA\Schema(type: "string")
             )
@@ -82,9 +82,15 @@ class PostController extends AbstractController
             new OA\Response(response: 404, description: "Post nicht gefunden")
         ]
     )]
-    public function getPostBySlug(string $slug, EntityManagerInterface $em, SerializerInterface $serializer): JsonResponse
+    public function getPostBySlug(string $identifier, EntityManagerInterface $em, SerializerInterface $serializer): JsonResponse
     {
-        $post = $em->getRepository(Post::class)->findOneBy(['slug' => $slug]);
+        $post = null;
+
+        if (is_numeric($identifier)) {
+            $post = $em->getRepository(Post::class)->find((int) $identifier);
+        } else {
+            $post = $em->getRepository(Post::class)->findOneBy(['slug' => $identifier]);
+        }
 
         if (!$post) {
             return new JsonResponse(['error' => 'Post nicht gefunden'], 404);
@@ -151,8 +157,13 @@ class PostController extends AbstractController
             return new JsonResponse(['error' => 'Titel ist erforderlich.'], 400);
         }
 
+        $user = $security->getUser();
+        if (!$user) {
+            return new JsonResponse(['error' => 'Authentifizierung erforderlich.'], Response::HTTP_UNAUTHORIZED);
+        }
+
         try {
-            $post = $postService->createPost($dto, $security->getUser());
+            $post = $postService->createPost($dto, $user);
             return new JsonResponse(['message' => 'Post erfolgreich erstellt', 'id' => $post->getId()], 201);
         } catch (\Throwable $e) {
             error_log('Fehler beim Erstellen des Posts: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
@@ -195,7 +206,8 @@ class PostController extends AbstractController
 
         try {
             $file->move($uploadDir, $filename);
-            $url = $request->getSchemeAndHttpHost() . '/api/public/uploads/' . $filename;
+            $appUrl = rtrim($_ENV['APP_URL'] ?? 'http://localhost:8000', '/');
+            $url = $appUrl . '/uploads/' . $filename;
             return new JsonResponse(['url' => $url], 201);
         } catch (\Exception $e) {
             error_log('Fehler beim Upload der Mediendatei: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
@@ -203,7 +215,7 @@ class PostController extends AbstractController
         }
     }
 
-    #[Route('/api/posts/{id}', name: 'update_post', methods: ['POST'])]
+    #[Route('/api/posts/{id}', name: 'update_post', methods: ['POST', 'PUT'])]
     #[OA\Post(
         path: "/api/posts/{id}",
         summary: "Blogpost aktualisieren",
@@ -247,12 +259,28 @@ class PostController extends AbstractController
         if ($post->getAuthor() !== $currentUser) {
             return new JsonResponse(['error' => 'Keine Berechtigung'], 403);
         }
-        
+
         $data = json_decode($request->getContent(), true);
 
-        $title = $data['title'] ?? $request->request->get('title');
-        $content = $data['content'] ?? $request->request->get('content');
-        $categoryId = isset($data['categoryId']) ? (int)$data['categoryId'] : ($request->request->get('categoryId') ? (int)$request->request->get('categoryId') : null);
+        // Debugging: Log request data
+        error_log('=== DEBUG UPDATE REQUEST ===');
+        error_log('Request content type: ' . $request->headers->get('Content-Type'));
+        error_log('Request content: ' . $request->getContent());
+        error_log('Request request all: ' . print_r($request->request->all(), true));
+        error_log('Request files: ' . print_r($request->files->all(), true));
+
+        // Bei multipart/form-data Requests sind die Daten in $request->request, nicht im JSON
+        $title = $request->request->get('title', $data['title'] ?? '');
+        $content = $request->request->get('content', $data['content'] ?? '');
+        $categoryId = $request->request->get('categoryId') ? (int)$request->request->get('categoryId') : ($data['categoryId'] ?? null);
+
+        // Debugging: Log extracted values
+        error_log('Extracted title: ' . $title);
+        error_log('Extracted content: ' . substr($content, 0, 200) . (strlen($content) > 200 ? '...' : ''));
+        error_log('Extracted categoryId: ' . $categoryId);
+        error_log('Title empty check: ' . (empty($title) ? 'true' : 'false'));
+        error_log('Content empty check: ' . (empty($content) ? 'true' : 'false'));
+        error_log('Content length: ' . strlen($content));
 
         $uploadedImages = $request->files->get('images', []);
         if (!is_array($uploadedImages) && $uploadedImages instanceof UploadedFile) {
@@ -263,11 +291,15 @@ class PostController extends AbstractController
 
         $titleImage = $request->files->get('titleImage');
 
+        // Fix: Use more robust validation that handles HTML content properly
+        // Don't use empty() for content as it can fail with HTML content like <p></p> or whitespace
         if (empty($title)) {
-            return new JsonResponse(['error' => 'kein Titel hinterlegt'], 402);
+            error_log('ERROR: Title is empty!');
+            return new JsonResponse(['error' => 'kein Titel hinterlegt'], 400);
         }
-        if (empty($content)) {
-            return new JsonResponse(['error' => 'kein Content hinterlegt'], 402);
+        if ($content === null || $content === '' || $content === '<p></p>' || $content === '<p><br></p>' || trim(strip_tags($content)) === '') {
+            error_log('ERROR: Content is empty or contains no meaningful content!');
+            return new JsonResponse(['error' => 'kein Content hinterlegt'], 400);
         }
 
         $dto = new PostUpdateDTO(

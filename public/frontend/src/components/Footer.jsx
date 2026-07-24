@@ -17,8 +17,7 @@ const Footer = () => {
     ],
     social: [
       { name: 'GitHub', path: 'https://github.com/Jens-Smit' },
-      { name: 'Twitter', path: 'https://twitter.com' },
-      { name: 'LinkedIn', path: 'https://linkedin.com' },
+      { name: 'LinkedIn', path: 'https://de.linkedin.com/in/jens-smit-dev' },
     ],
   };
 
@@ -32,7 +31,7 @@ const Footer = () => {
               className="text-xl font-bold text-gradient mb-4"
               whileHover={{ scale: 1.05 }}
             >
-              BlogAPI
+              Blog
             </motion.h3>
             <p className="text-gray-600 dark:text-gray-400 text-sm">
               Ein moderner Blog mit React und Symfony. Erstellt für Entwickler und Enthusiasten.
@@ -101,7 +100,7 @@ const Footer = () => {
 
         {/* Copyright */}
         <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 text-center text-gray-600 dark:text-gray-400 text-sm">
-          <p>© {currentYear} BlogAPI. Alle Rechte vorbehalten.</p>
+          <p>© {currentYear} <a href="https://jenssmit.de" target="_blank" rel="noopener noreferrer" className="hover:text-primary-600 dark:hover:text-primary-400">Jens Smit</a>. Alle Rechte vorbehalten.</p>
         </div>
       </div>
     </footer>

@@ -33,6 +33,10 @@ RUN composer install --no-scripts --no-autoloader --no-interaction
 COPY . .
 RUN composer dump-autoload --optimize
 
+# Berechtigungen für das Serializer-Verzeichnis und Symfony-Cache-Ordner anpassen
+RUN mkdir -p /var/www/html/var/cache /var/www/html/var/log \
+    && chown -R www-data:www-data /var/www/html/var/cache /var/www/html/var/log /var/www/html/vendor/ezyang/htmlpurifier/library/HTMLPurifier/DefinitionCache/Serializer
+
 # Apache-Konfiguration für Symfony anpassen
 RUN sed -i 's/DocumentRoot \/var\/www\/html/DocumentRoot \/var\/www\/html\/public/' /etc/apache2/sites-enabled/000-default.conf
 RUN a2enmod rewrite

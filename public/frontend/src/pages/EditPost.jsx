@@ -5,11 +5,14 @@ import { Edit3, Loader2, Plus } from 'lucide-react';
 import RichTextEditor from '../components/RichTextEditor';
 import CategoryModal from '../components/CategoryModal';
 import api from '../services/api';
+import config from '../config';
+import { updatePost } from '../services/posts';
 
 const buildMediaUrl = (value) => {
   if (!value) return '';
   if (/^https?:\/\//i.test(value)) return value;
-  return `/api/public/uploads/${value}`;
+  // Use the correct API path that matches the backend with domain from config
+  return config.getUploadUrl(value);
 };
 
 const EditPost = () => {
@@ -27,6 +30,7 @@ const EditPost = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [uploadedMediaFiles, setUploadedMediaFiles] = useState([]);
+  const [initialMediaData, setInitialMediaData] = useState([]); // Neu hinzufügen
   const [featuredImageFile, setFeaturedImageFile] = useState(null);
   const [featuredImagePreview, setFeaturedImagePreview] = useState('');
   const [featuredImageFromEditor, setFeaturedImageFromEditor] = useState(null);
@@ -34,37 +38,49 @@ const EditPost = () => {
 
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch post data
-        const postResponse = await api.get(`/posts/${id}`);
-        const post = postResponse.data;
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      // Fetch post data
+      const postResponse = await api.get(`/posts/${id}`);
+      const post = postResponse.data;
 
-        setFormData({
-          title: post.title,
-          slug: post.slug,
-          excerpt: post.excerpt || '',
-          content: post.content,
-          category: post.category?.id || '',
-          image: post.image || '',
-        });
+      setFormData({
+        title: post.title,
+        slug: post.slug,
+        excerpt: post.excerpt || '',
+        content: post.content,
+        category: post.category?.id || '',
+        image: post.image || '',
+      });
 
-        setFeaturedImagePreview(buildMediaUrl(post.titleImage || post.image));
+      setFeaturedImagePreview(buildMediaUrl(post.titleImage || post.image));
 
-        // Fetch categories only
-        const categoriesResponse = await api.get('/categories');
-        setCategories(categoriesResponse.data);
-      } catch (err) {
-        console.error('Fehler beim Laden der Daten:', err);
-        setError('Fehler beim Laden der Beitragsdaten.');
-      } finally {
-        setLoading(false);
+      // Load existing media files into RichTextEditor
+      if (post.images && post.images.length > 0) {
+        const existingMedia = post.images.map((imagePath, index) => ({
+          id: `existing-${index}-${Date.now()}`,
+          name: imagePath.split('/').pop() || `image-${index}`,
+          url: buildMediaUrl(imagePath),
+          file: null, // No file object for existing images
+          isFeatured: false
+        }));
+        setInitialMediaData(existingMedia);
       }
-    };
 
-    fetchData();
-  }, [id]);
+      // Fetch categories only
+      const categoriesResponse = await api.get('/categories');
+      setCategories(categoriesResponse.data);
+    } catch (err) {
+      console.error('Fehler beim Laden der Daten:', err);
+      setError('Fehler beim Laden der Beitragsdaten.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchData();
+}, [id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -123,6 +139,17 @@ const EditPost = () => {
       postData.append('slug', formData.slug);
       postData.append('excerpt', formData.excerpt || '');
 
+      // Debugging: Log the form data being sent
+      console.log('FormData contents:');
+      console.log('Title:', formData.title);
+      console.log('Content:', formData.content);
+      console.log('CategoryId:', formData.category);
+      console.log('Slug:', formData.slug);
+      console.log('Excerpt:', formData.excerpt || '');
+      console.log('Featured image from editor:', featuredImageFromEditor);
+      console.log('Featured image file:', featuredImageFile);
+      console.log('Uploaded media files:', uploadedMediaFiles);
+
       // Use featured image from editor if available, otherwise use the manually uploaded one
       const finalFeaturedImage = featuredImageFromEditor || featuredImageFile;
 
@@ -136,14 +163,18 @@ const EditPost = () => {
         }
       });
 
-      const response = await api.put(`/posts/${id}`, postData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      // Add _method field to override POST to PUT for Symfony
+      postData.append('_method', 'PUT');
 
-      if (response.data.id) {
-        navigate(`/blog/${response.data.slug || formData.slug}`);
+      // Debugging: Log FormData entries
+      for (let [key, value] of postData.entries()) {
+        console.log(`FormData entry - ${key}:`, value);
+      }
+
+      const data = await updatePost(id, postData);
+
+      if (data.id) {
+        navigate(`/blog/${data.slug || formData.slug}`);
       } else {
         setError('Fehler beim Aktualisieren des Beitrags.');
       }
@@ -218,20 +249,7 @@ const EditPost = () => {
               />
             </div>
 
-            <div>
-              <label htmlFor="excerpt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Auszug
-              </label>
-              <textarea
-                id="excerpt"
-                name="excerpt"
-                value={formData.excerpt}
-                onChange={handleChange}
-                placeholder="Kurzer Auszug des Beitrags..."
-                rows={3}
-                className="input-field resize-none"
-              />
-            </div>
+            
 
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -296,6 +314,7 @@ const EditPost = () => {
                 onChange={(content) => setFormData((prev) => ({ ...prev, content }))}
                 onMediaFilesChange={setUploadedMediaFiles}
                 onFeaturedImageChange={handleFeaturedImageFromEditor}
+                initialMedia={initialMediaData}
               />
             </div>
 

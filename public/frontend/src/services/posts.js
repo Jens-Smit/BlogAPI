@@ -25,7 +25,11 @@ const getPostBySlug = async (slug) => {
 // Create a new post
 const createPost = async (postData) => {
   try {
-    const response = await api.post('/posts', postData);
+    const response = await api.post('/posts', postData, {
+      headers: {
+        'Content-Type': 'multipart/form-data', // Überschreibt das globale JSON
+      },
+    });
     return response.data;
   } catch (error) {
     console.error('Fehler beim Erstellen des Beitrags:', error);
@@ -36,7 +40,11 @@ const createPost = async (postData) => {
 // Update a post
 const updatePost = async (id, postData) => {
   try {
-    const response = await api.post(`/posts/${id}`, postData);
+    const response = await api.post(`/posts/${id}`, postData, {
+      headers: {
+        'Content-Type': 'multipart/form-data', // Überschreibt das globale JSON
+      },
+    });
     return response.data;
   } catch (error) {
     console.error('Fehler beim Aktualisieren des Beitrags:', error);
@@ -47,7 +55,7 @@ const updatePost = async (id, postData) => {
 // Delete a post
 const deletePost = async (id) => {
   try {
-    const response = await api.delete(`/api/posts/${id}`);
+    const response = await api.delete(`/posts/${id}`);
     return response.data;
   } catch (error) {
     console.error('Fehler beim Löschen des Beitrags:', error);
@@ -63,7 +71,7 @@ const uploadImage = async (imageFile) => {
 
     const response = await api.post('/posts/upload', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        'Content-Type': 'multipart/form-data', // Überschreibt das globale JSON
       },
     });
 

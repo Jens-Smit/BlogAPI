@@ -21,6 +21,7 @@ dist-ssr/
 .env.*.local
 
 # Pachag JWT config (wie vom Benutzer angefordert)
+config/jwt/
 pachag.config.js
 pachag.config.json
 *.pachag
@@ -38,6 +39,7 @@ bin/
 config/packages/dev/
 config/packages/test/
 public/bundles/
+public/uploads/
 translations/
 *.php_cs.cache
 

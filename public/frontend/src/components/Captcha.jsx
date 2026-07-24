@@ -117,13 +117,13 @@ const Captcha = ({ onVerify }) => {
               Klicke auf die Teile, um sie schrittweise zurückzudrehen, bis sie zusammenpassen.
             </p>
 
-            <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+            <div className="grid grid-cols-2 mx-auto w-200 max-w-md">
               {captchaImages.map((image, index) => (
                 <button
                   key={`${captchaId}-${index}`}
                   type="button"
                   onClick={() => handlePieceClick(index)}
-                  className="p-1 rounded border border-gray-300 dark:border-gray-600 bg-white hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className=""
                   aria-label={`Captcha Teil ${index + 1} drehen`}
                 >
                   <img
