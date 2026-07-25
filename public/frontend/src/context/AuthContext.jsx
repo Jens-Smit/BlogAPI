@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getCurrentUser, isAuthenticated, logout } from '../services/auth';
+import { getCurrentUser, logout } from '../services/auth';
 
 const AuthContext = createContext();
 
@@ -16,12 +16,17 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (isAuthenticated()) {
-          const userData = await getCurrentUser();
-          setUser(userData);
-        }
+        // Wir verlassen uns bewusst NICHT mehr auf ein localStorage-Flag,
+        // sondern fragen die HttpOnly-Cookies direkt beim Backend ab.
+        // Grund: Das Flag konnte durch andere Login-Wege (z.B. LoginForm)
+        // unbemerkt out-of-sync geraten, was nach einem Reload faelschlich
+        // zum Logout fuehrte, obwohl die Cookies noch gueltig waren.
+        const userData = await getCurrentUser();
+        setUser(userData);
+        localStorage.setItem('is_logged_in', 'true');
       } catch (error) {
         console.error('Auth check failed:', error);
+        localStorage.removeItem('is_logged_in');
       } finally {
         setLoading(false);
       }

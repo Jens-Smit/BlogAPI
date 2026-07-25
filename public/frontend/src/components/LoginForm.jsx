@@ -38,6 +38,8 @@ const LoginForm = () => {
       const isSuccessfulLogin = response.status >= 200 && response.status < 300 && !!response.data?.user;
 
       if (isSuccessfulLogin) {
+        localStorage.setItem('is_logged_in', 'true');
+
         try {
           const userResponse = await api.get('/me');
           setAuthUser(userResponse.data);

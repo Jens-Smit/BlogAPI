@@ -23,8 +23,14 @@ security:
                 check_path: /api/token/refresh
 
         # 2.5. Öffentliche API-Endpunkte (keine Authentifizierung)
+        # WICHTIG: Firewalls matchen nur nach 'pattern', NIEMALS nach HTTP-Methode.
+        # Hier duerfen nur Routen stehen, die IMMER oeffentlich sind, unabhaengig
+        # von der Methode. 'posts' und 'categories' gehoeren NICHT hierher, weil
+        # sie GET-oeffentlich, aber POST/PUT/PATCH/DELETE-geschuetzt sind - diese
+        # Unterscheidung kann eine Firewall nicht treffen, nur access_control weiter
+        # unten (und das greift nur, wenn die Route ueber die 'api'-Firewall laeuft).
         public_api:
-            pattern: ^/api/(captcha|contact|login|register|password/request-reset|password/reset|doc|posts|categories|health)
+            pattern: ^/api/(captcha|contact|login|register|password/request-reset|password/reset|doc|health)$
             stateless: true
             security: false
 

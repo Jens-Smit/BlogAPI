@@ -73,7 +73,7 @@ class JwtTokenAuthenticator extends AbstractAuthenticator implements Authenticat
 
             // DEBUG: Log successful token parsing
             $this->logger->debug('JWT Authenticator token parsed successfully', [
-                'payload_username' => $payload['email'] ?? 'unknown',
+                'payload_email' => $payload['email'] ?? 'unknown',
                 'payload_exp' => $payload['exp'] ?? 'unknown',
                 'payload_iat' => $payload['iat'] ?? 'unknown'
             ]);

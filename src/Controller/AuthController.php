@@ -106,8 +106,8 @@ class AuthController extends AbstractController
             return new JsonResponse(['error' => 'Ungültige Anmeldedaten.'], 401);
         }
 
-        // Create JWT token - use username to match UserProvider configuration
-        $accessToken = $this->jwtManager->createFromPayload($user, ['username' => $user->getEmail()]);
+        // Create JWT token - claim key must be 'email' to match JwtTokenAuthenticator::authenticate()
+        $accessToken = $this->jwtManager->createFromPayload($user, ['email' => $user->getEmail()]);
         $refreshToken = $this->refreshTokenGenerator->createForUserWithTtl($user, 604800);
         $this->refreshTokenManager->save($refreshToken);
 
@@ -453,7 +453,8 @@ class AuthController extends AbstractController
         }
 
         // Neuen Access-Token generieren (identisch zur Login-Logik)
-        $accessToken = $this->jwtManager->createFromPayload($user, ['username' => $user->getEmail()]);
+        // Claim key muss 'email' sein, damit JwtTokenAuthenticator::authenticate() ihn findet
+        $accessToken = $this->jwtManager->createFromPayload($user, ['email' => $user->getEmail()]);
         
         // Neuen BEARER-Cookie erstellen
         $accessTokenCookie = new Cookie('BEARER', $accessToken, time() + 3600, '/', null, false, true, false, 'lax');
