@@ -1,0 +1,9 @@
+services:
+  help-center:
+    build:
+      context: .
+    image: gastroos-help-center:dev
+    container_name: gastroos-help-center-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:80"

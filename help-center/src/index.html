@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="GastroOS Hilfe-Center – Anleitungen, FAQ und Support für die Gastronomie-Software von Vision Gastro." />
+  <meta name="theme-color" content="#0f0e0c" />
+  <title>GastroOS Hilfe-Center</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='22'%3E%F0%9F%8D%BD%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/main.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+
+  <header class="header">
+    <div class="container header__inner">
+      <a class="brand" href="#top">
+        <span class="brand__logo" aria-hidden="true">🍽️</span>
+        <span class="brand__name">GastroOS <em>Hilfe</em></span>
+      </a>
+      <nav class="header__nav" aria-label="Hauptnavigation">
+        <a href="#kategorien">Anleitungen</a>
+        <a href="#faq">FAQ</a>
+        <a href="#kontakt" class="btn btn--primary">Kontakt</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="container hero__inner">
+        <h1 class="hero__title">Wie können wir <span class="accent">helfen?</span></h1>
+        <p class="hero__subtitle">Anleitungen, Antworten und Support rund um GastroOS – das Betriebssystem für die moderne Gastronomie.</p>
+        <div class="search" role="search">
+          <input type="search" id="search-input" class="search__input" placeholder="Suchbegriff eingeben …" aria-label="Hilfe durchsuchen" />
+          <span class="search__hint" id="search-hint" aria-live="polite"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="kategorien" aria-labelledby="kategorien-title">
+      <div class="container">
+        <h2 class="section__title" id="kategorien-title">Anleitungen nach Thema</h2>
+        <div class="grid" id="category-grid"></div>
+        <div class="grid" id="article-grid" hidden></div>
+      </div>
+    </section>
+
+    <section class="section section--muted" id="faq" aria-labelledby="faq-title">
+      <div class="container">
+        <h2 class="section__title" id="faq-title">Häufig gestellte Fragen</h2>
+        <div class="faq" id="faq-list"></div>
+      </div>
+    </section>
+
+    <section class="section" id="kontakt" aria-labelledby="kontakt-title">
+      <div class="container contact">
+        <h2 class="section__title" id="kontakt-title">Support kontaktieren</h2>
+        <p class="contact__lead" id="contact-lead"></p>
+        <ul class="contact__list" id="contact-list"></ul>
+        <a class="btn btn--primary btn--lg" id="contact-mail" href="#">E-Mail an den Support</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <p>© <span id="year"></span> Vision Gastro – GastroOS Hilfe-Center</p>
+      <nav class="footer__nav" aria-label="Rechtliches">
+        <a href="https://visiongastro.de/" rel="noopener">visiongastro.de</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="data/content.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
