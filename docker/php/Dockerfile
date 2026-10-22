@@ -1,5 +1,7 @@
 # Basis-Image: PHP 8.2 mit Apache
-FROM php:8.2-apache
+# PHP2Shell-Fix: PHP 8.2.35 gepinnt (CVE-2026-109618/CVE-2026-109619);
+# der Floating-Tag php:8.2-* zeigte zuletzt noch auf die verwundbare 8.2.34.
+FROM php:8.2.35-apache
 
 # Abhängigkeiten installieren (GD-Library Anforderungen ergänzt)
 RUN apt-get update && apt-get install -y \
