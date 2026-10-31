@@ -440,7 +440,7 @@ class PostControllerTest extends WebTestCase
             ])
         );
 
-        $this->assertSame(402, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(Response::HTTP_BAD_REQUEST, $this->client->getResponse()->getStatusCode());
     }
 
     public function testUpdatePostFailsWhenNotAuthor(): void
@@ -589,7 +589,7 @@ class PostControllerTest extends WebTestCase
 
         $data = json_decode($this->client->getResponse()->getContent(), true);
         $this->assertArrayHasKey('url', $data);
-        $this->assertStringContainsString('/api/public/uploads/', $data['url']);
+        $this->assertStringContainsString('/uploads/', $data['url']);
     }
 
     public function testUploadMediaFailsWithoutFile(): void

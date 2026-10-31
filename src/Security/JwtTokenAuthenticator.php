@@ -140,7 +140,7 @@ class JwtTokenAuthenticator extends AbstractAuthenticator implements Authenticat
         ]);
 
         return new JsonResponse([
-            'error' => 'Authentifizierung erforderlich',
+            'error' => 'Authentifizierung erforderlich.',
             'message' => 'Es wurde kein gültiges Autorisierungs-Cookie (BEARER) gefunden.'
         ], Response::HTTP_UNAUTHORIZED);
     }

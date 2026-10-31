@@ -27,7 +27,7 @@ class AuthServiceTest extends TestCase
 
     public function testRegisterSuccessful()
     {
-        $dto = new RegisterRequestDTO('test@example.com', 'password123');
+        $dto = new RegisterRequestDTO('testuser', 'test@example.com', 'password123');
         $userRepo = $this->createMock(UserRepository::class);
         $userRepo->method('findOneBy')->willReturn(null);
 
@@ -45,7 +45,7 @@ class AuthServiceTest extends TestCase
         $this->expectException(BadRequestHttpException::class);
         $this->expectExceptionMessage('E-Mail ist bereits registriert.');
 
-        $dto = new RegisterRequestDTO('existing@example.com', 'password123');
+        $dto = new RegisterRequestDTO('existinguser', 'existing@example.com', 'password123');
         $userRepo = $this->createMock(UserRepository::class);
         $userRepo->method('findOneBy')->willReturn(new User());
 

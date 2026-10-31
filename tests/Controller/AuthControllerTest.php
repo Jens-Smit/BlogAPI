@@ -184,6 +184,7 @@ class AuthControllerTest extends WebTestCase
         $this->client->request('POST', '/api/register', [], [], 
             ['CONTENT_TYPE' => 'application/json'], 
             json_encode([
+                'username' => 'user_' . uniqid(),
                 'email' => $email,
                 'password' => 'password123'
             ])
@@ -217,6 +218,7 @@ class AuthControllerTest extends WebTestCase
         $this->client->request('POST', '/api/register', [], [], 
             ['CONTENT_TYPE' => 'application/json'], 
             json_encode([
+                'username' => 'user_' . uniqid(),
                 'email' => $email,
                 'password' => 'password123'
             ])
@@ -245,7 +247,7 @@ class AuthControllerTest extends WebTestCase
 
         $data = json_decode($response->getContent(), true);
         $this->assertArrayHasKey('error', $data);
-        $this->assertSame('E-Mail und Passwort sind erforderlich.', $data['error']);
+        $this->assertSame('Benutzername, E-Mail und Passwort sind erforderlich.', $data['error']);
     }
 
     // ==================== LOGIN TESTS ====================
