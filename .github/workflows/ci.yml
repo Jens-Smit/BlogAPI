@@ -119,7 +119,7 @@ jobs:
           grep -E '^(Tests:|Time:|OK \(|OK, but|FAILURES!|ERRORS!)' "$L" | head -4 | while IFS= read -r line; do
             printf '::error::[phpunit-footer] %s\n' "$line"
           done
-          grep -E '✘' "$L" | head -5 | while IFS= read -r line; do
+          grep -E '✘' "$L" | head -10 | while IFS= read -r line; do
             printf '::error::[phpunit-failed] %s\n' "$line"
           done
         fi
@@ -129,8 +129,11 @@ jobs:
       run: |
         L=/tmp/step-phpunit.log
         if [ -f "$L" ]; then
-          grep -A3 '✘' "$L" | head -10 | while IFS= read -r line; do
-            printf '::error::[phpunit-faildetail] %s\n' "$line"
+          grep -E '✘' "$L" | tail -n +11 | head -5 | while IFS= read -r line; do
+            printf '::error::[phpunit-failed2] %s\n' "$line"
+          done
+          grep -m1 -A4 -E 'mkdir\(\):|Exception:|Error:' "$L" | head -5 | while IFS= read -r line; do
+            printf '::error::[phpunit-error] %s\n' "$line"
           done
         fi
         for f in /tmp/step-jwt.log /tmp/step-db.log /tmp/step-schema.log; do

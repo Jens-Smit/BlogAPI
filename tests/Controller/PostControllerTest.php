@@ -14,6 +14,8 @@ class PostControllerTest extends WebTestCase
 {
     private $client;
     private $em;
+    /** @var string[] Temporaere Dateien aus createMockUploadedFile() */
+    private array $tmpFiles = [];
 
     protected function setUp(): void
     {
