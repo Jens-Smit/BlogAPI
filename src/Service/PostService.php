@@ -57,19 +57,8 @@ class PostService
             throw new \InvalidArgumentException("Titelbild ist erforderlich.");
         }
 
-        // Validierung: Kategorie muss existieren, wenn angegeben
-        $category = null;
-        if ($dto->categoryId !== null) {
-            $category = $this->em->getRepository(Category::class)->find($dto->categoryId);
-            if (!$category) {
-                throw new \InvalidArgumentException("Kategorie mit ID {$dto->categoryId} nicht gefunden.");
-            }
-        }
-        $slug = strtolower($this->slugger->slug($dto->title));
-        $existing = $this->em->getRepository(Post::class)->findOneBy(['slug' => $slug]);
-        if ($existing) {
-            $slug .= '-' . uniqid();
-        }
+        $category = $this->resolveCategory($dto->categoryId);
+        $slug = $this->generateUniqueSlug($dto->title);
         $post = new Post();
         $post->setSlug($slug);
         $post->setTitle($dto->title);
@@ -126,6 +115,155 @@ class PostService
         $this->em->flush();
 
         return $post;
+    }
+
+    /**
+     * Erstellt einen Blogpost auf Basis bereits gespeicherter Bilddateien.
+     *
+     * Wird vom MCP-Endpunkt genutzt: Der MCP-Client lädt Bilder zuerst
+     * separat hoch (storeImageData) und referenziert sie anschließend über
+     * ihre Dateinamen. Dadurch kann ein MCP-Client Beiträge samt Beitragsbild
+     * in zwei Schritten erstellen, ohne Multipart-Uploads unterstützen zu müssen.
+     *
+     * @param string[] $additionalImageFilenames
+     */
+    public function createPostFromStoredImages(
+        string $title,
+        ?string $content,
+        int $categoryId,
+        string $titleImageFilename,
+        array $additionalImageFilenames,
+        User $author
+    ): Post {
+        if (trim($title) === '') {
+            throw new \InvalidArgumentException('Titel ist erforderlich.');
+        }
+
+        $category = $this->resolveCategory($categoryId);
+
+        // Titelbild validieren (muss bereits im Upload-Verzeichnis liegen)
+        $titleImageFilename = $this->assertStoredImageExists($titleImageFilename);
+
+        $slug = $this->generateUniqueSlug($title);
+
+        $post = new Post();
+        $post->setSlug($slug);
+        $post->setTitle($title);
+        $post->setAuthor($author);
+        $post->setCreatedAt(new \DateTime());
+        $post->setCategory($category);
+        $post->setTitleImage($titleImageFilename);
+
+        $images = [$titleImageFilename];
+        foreach ($additionalImageFilenames as $filename) {
+            $images[] = $this->assertStoredImageExists((string) $filename);
+        }
+        $post->setImages($images);
+
+        $post->setContent($this->sanitizeContent($content ?? ''));
+
+        $this->em->persist($post);
+        $this->em->flush();
+
+        return $post;
+    }
+
+    /**
+     * Speichert Bilddaten (z.B. Base64-dekodiert aus einem MCP-Tool-Aufruf)
+     * mit derselben Validierung wie reguläre Uploads:
+     * MIME-Whitelist, 5MB-Limit, Inhaltsprüfung per finfo.
+     *
+     * @return string Der generierte, sichere Dateiname im Upload-Verzeichnis.
+     */
+    public function storeImageData(string $data, string $originalName): string
+    {
+        // ✅ Größenlimit (5MB)
+        if (strlen($data) > 5242880) {
+            throw new \RuntimeException('File too large');
+        }
+
+        if ($data === '') {
+            throw new \RuntimeException('Empty file');
+        }
+
+        // ✅ Echten Content-Type prüfen (nicht nur die Angabe des Clients)
+        $realMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($data);
+
+        $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!in_array($realMime, $allowedMimes, true)) {
+            throw new \RuntimeException('Invalid file type');
+        }
+
+        $extension = match ($realMime) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            default => throw new \RuntimeException('Unsupported type'),
+        };
+
+        $safeFilename = $this->slugger->slug(pathinfo($originalName, PATHINFO_FILENAME));
+        if (trim((string) $safeFilename) === '') {
+            $safeFilename = $this->slugger->slug('bild');
+        }
+        $newFilename = $safeFilename . '-' . bin2hex(random_bytes(8)) . '.' . $extension;
+
+        $targetPath = $this->uploadDirectory . '/' . $newFilename;
+        if (file_put_contents($targetPath, $data) === false) {
+            throw new \RuntimeException('Upload fehlgeschlagen.');
+        }
+
+        // ✅ Restriktive Permissions
+        chmod($targetPath, 0644);
+
+        return $newFilename;
+    }
+
+    /**
+     * Prüft, dass ein Dateiname auf eine echte Datei im Upload-Verzeichnis
+     * zeigt, und gibt den normalisierten Namen zurück.
+     */
+    private function assertStoredImageExists(string $filename): string
+    {
+        if (!preg_match('/^[a-zA-Z0-9._-]+$/', $filename)) {
+            throw new \InvalidArgumentException('Ungültiger Dateiname.');
+        }
+
+        $filePath = realpath($this->uploadDirectory . '/' . $filename);
+
+        if ($filePath === false || strpos($filePath, realpath($this->uploadDirectory)) !== 0) {
+            throw new \InvalidArgumentException('Bilddatei nicht gefunden: ' . $filename);
+        }
+
+        if (!is_file($filePath)) {
+            throw new \InvalidArgumentException('Bilddatei nicht gefunden: ' . $filename);
+        }
+
+        return $filename;
+    }
+
+    private function resolveCategory(?int $categoryId): ?Category
+    {
+        $category = null;
+        if ($categoryId !== null) {
+            $category = $this->em->getRepository(Category::class)->find($categoryId);
+            if (!$category) {
+                throw new \InvalidArgumentException("Kategorie mit ID {$categoryId} nicht gefunden.");
+            }
+        }
+
+        return $category;
+    }
+
+    private function generateUniqueSlug(string $title): string
+    {
+        $slug = strtolower($this->slugger->slug($title));
+        $existing = $this->em->getRepository(Post::class)->findOneBy(['slug' => $slug]);
+        if ($existing) {
+            $slug .= '-' . uniqid();
+        }
+
+        return $slug;
     }
 
     public function updatePost(Post $post, PostUpdateDTO $dto): Post

@@ -40,10 +40,20 @@ services:
         arguments:
             $frontendUrl: '%env(FRONTEND_URL)%'
 
+    # MCP-Server: Basis-URL für öffentliche Bild-URLs
+    App\Mcp\McpToolProvider:
+        arguments:
+            $appUrl: '%env(APP_URL)%'
+
     # JWT Authenticator
     App\Security\JwtTokenAuthenticator:
         arguments:
             $jwtManager: '@Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface'
+            $userProvider: '@security.user.provider.concrete.app_user_provider'
+
+    # MCP Token Authenticator (Authorization-Header, eigene Firewall)
+    App\Security\McpTokenAuthenticator:
+        arguments:
             $userProvider: '@security.user.provider.concrete.app_user_provider'
    
     App\Controller\ContactController:
