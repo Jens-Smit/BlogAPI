@@ -75,6 +75,7 @@ class AuthControllerTest extends WebTestCase
 
         $user = new User();
         $user->setEmail($email);
+        $user->setUsername('user_' . uniqid());
         $hashedPassword = $passwordHasher->hashPassword($user, $password);
         $user->setPassword($hashedPassword);
 
@@ -155,6 +156,7 @@ class AuthControllerTest extends WebTestCase
 
         $user = new User();
         $user->setEmail($email);
+        $user->setUsername('user_' . uniqid());
         $hashedPassword = $passwordHasher->hashPassword($user, $password);
         $user->setPassword($hashedPassword);
 
@@ -207,6 +209,7 @@ class AuthControllerTest extends WebTestCase
         $email = 'test_existing_' . uniqid() . '@example.com';
         $user = new User();
         $user->setEmail($email);
+        $user->setUsername('user_' . uniqid());
         $user->setPassword('hashedpassword');
         $em->persist($user);
         $em->flush();

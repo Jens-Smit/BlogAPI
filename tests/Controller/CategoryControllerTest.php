@@ -42,6 +42,7 @@ class CategoryControllerTest extends WebTestCase
 
         $user = new User();
         $user->setEmail($email);
+        $user->setUsername('user_' . uniqid());
 
         if (method_exists($user, 'setPassword')) {
             $user->setPassword('dummyhash');
