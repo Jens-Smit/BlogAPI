@@ -76,7 +76,7 @@ class McpController extends AbstractController
     }
 
     #[Route('/api/mcp', name: 'mcp_endpoint_get', methods: ['GET'])]
-    public function stream(): Response
+    public function getEndpoint(): Response
     {
         // Kein server-initiierter SSE-Stream: 405 gemäß Streamable-HTTP-Spezifikation
         return new JsonResponse(
