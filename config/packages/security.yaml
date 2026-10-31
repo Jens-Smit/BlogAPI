@@ -34,6 +34,16 @@ security:
             stateless: true
             security: false
 
+        # 2.8. MCP-Firewall (KI-Clients, z.B. Vibe/Mistral, Claude, Cursor)
+        # Eigene Firewall VOR der Haupt-API-Firewall, damit der Entry Point
+        # (401 + WWW-Authenticate: Bearer) sauber vom Cookie-Flow getrennt ist.
+        mcp:
+            pattern: ^/api/mcp$
+            stateless: true
+            provider: app_user_provider
+            custom_authenticators:
+                - App\Security\McpTokenAuthenticator
+
         # 3. Haupt-API Firewall (geschützte Routen)
         api:
             pattern: ^/api
@@ -41,6 +51,7 @@ security:
             provider: app_user_provider
 
             # Custom Authenticators für JWT-basierte Authentifizierung
+            # (Browser/Frontend: BEARER-Cookie; MCP-Clients: eigene Firewall)
             custom_authenticators:
                 - App\Security\JwtTokenAuthenticator
 
@@ -80,6 +91,11 @@ security:
         # ========================================
         # GESCHÜTZTE ROUTEN (Authentifizierung erforderlich)
         # ========================================
+        # MCP-Endpunkt: Jede JSON-RPC-Nachricht erfordert einen gültigen
+        # MCP-Token (Authorization: Bearer mcp_...). Bewusst für alle
+        # Methoden abgesichert - auch initialize.
+        - { path: ^/api/mcp$, roles: IS_AUTHENTICATED_FULLY }
+
         # Passwortd ändern für authentifizierte Benutzer
         - { path: ^/api/password/change, roles: IS_AUTHENTICATED_FULLY }
 

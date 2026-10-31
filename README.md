@@ -9,6 +9,27 @@ Eine gehärtete, produktionsreife Blog-API mit erweiterten Security-Features, JW
 
 ---
 
+## 🤖 MCP-Endpunkt (KI-Anbindung)
+
+Die BlogAPI stellt einen MCP-Server (Model Context Protocol, Streamable HTTP) unter `POST /api/mcp` bereit. Damit können KI-Clients wie **Vibe/Mistral**, Claude oder Cursor authentifiziert Blogbeiträge inklusive Beitragsbildern erstellen und verwalten.
+
+Vollständige Dokumentation: [docs/mcp.md](docs/mcp.md) — Token-Erstellung, Tool-Referenz, Anbindung in Vibe/Mistral und Testabdeckung.
+
+**Kurzübersicht:**
+
+```bash
+# 1. MCP-Token erstellen (wird nur einmal angezeigt)
+php bin/console app:mcp:create-token info@jenssmit.de --name=Vibe
+
+# 2. Handshake testen
+curl -X POST https://<api-host>/api/mcp \
+  -H "Authorization: Bearer mcp_<token>" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
+```
+
+---
+
 ## 🚀 Schnellstart mit Docker
 
 ### Vorraussetzungen

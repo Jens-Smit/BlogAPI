@@ -26,6 +26,7 @@ const Navbar = () => {
     { name: 'Dashboard', path: '/dashboard' },
     { name: 'Profil', path: '/profile' },
     { name: 'Beitrag erstellen', path: '/create-post' },
+    { name: 'MCP-Token', path: '/mcp-tokens' },
   ];
 
   const isActive = (path) => location.pathname === path;

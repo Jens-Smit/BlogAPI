@@ -25,13 +25,20 @@ class PostServiceTest extends TestCase
 {
     private MockObject|EntityManagerInterface $em;
     private PostService $postService;
-    private string $projectDir = '/var/www';
+    private string $projectDir;
     private string $uploadDirectory;
     private string $apiUrl = 'https://api.example.com';
     private array $tmpFiles = [];
 
     protected function setUp(): void
     {
+        // Projektverzeichnis (fuer den HTMLPurifier-Cache aus
+        // PostService::sanitizeContent): beschreibbares Temp-Verzeichnis
+        // statt hartcodiertem '/var/www', das ausserhalb von
+        // Entwicklungsumgebungen nicht beschreibbar ist und in CI
+        // zu 'mkdir(): Permission denied' fuehrt.
+        $this->projectDir = sys_get_temp_dir() . '/blogapi_postservice_test';
+
         // Erstelle temporäres Upload-Verzeichnis
         $this->uploadDirectory = sys_get_temp_dir() . '/test_uploads_' . uniqid();
         mkdir($this->uploadDirectory);

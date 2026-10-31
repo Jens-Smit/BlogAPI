@@ -7,6 +7,155 @@ on:
     branches: [ main, master ]
 
 jobs:
+  php-tests:
+    name: Backend Tests (PHPUnit)
+    runs-on: ubuntu-latest
+
+    services:
+      # config/packages/doctrine.yaml pinnt server_version: '10.4.32'
+      # (MariaDB). Damit die Doctrine-Platform zur Server-Version passt,
+      # verwendet CI dieselbe MariaDB-Version.
+      mariadb:
+        image: mariadb:10.4
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: test_blog
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: pdo_mysql, mbstring, xml, curl, zip, intl, gd, fileinfo
+        coverage: none
+
+    - name: Prepare .env for CI
+      # symfony/runtime ruft bei JEDEM bin/console-Aufruf Dotenv::bootEnv('.env')
+      # auf. Dotenv wirft eine PathException, wenn weder .env noch .env.dist
+      # existieren (beide sind nicht im Repository, .env ist per .gitignore
+      # ignoriert). Deshalb wird eine funktionale .env aus der committeten
+      # .env.test erzeugt.
+      #
+      # DATABASE_URL wird in BEIDEN Dateien ersetzt (auch in der .env.test- Kopie):
+      # Dotenv::populate() ueberschreibt bei Datei-uebergreifendem Laden
+      # Dotenv-eigene Variablen (die spaeter geladene .env.test gewinnt), und
+      # innerhalb einer Datei gewinnt die erste Zuweisung. PHPUnit setzt
+      # DATABASE_URL=test_blog (phpunit.xml.dist) als echte Variable, die von
+      # Dotenv respektiert wird. Mit der sed-Ersetzung verwenden damit alle
+      # Steps dieselbe DB: test_blog + Suffix "_test" = test_blog_test.
+      run: |
+        cp .env.test .env
+        sed -i 's|^DATABASE_URL=.*|DATABASE_URL="mysql://root:@127.0.0.1:3306/test_blog"|' .env .env.test
+        # Kontakt- und Lock-Variablen fehlen in .env.test, werden aber von
+        # config/services.yaml bzw. config/packages/lock.yaml referenziert
+        printf 'CONTACT_FROM_EMAIL="noreply@example.de"\n' >> .env
+        printf 'CONTACT_TO_EMAIL="info@example.de"\n' >> .env
+        printf 'LOCK_DSN="flock"\n' >> .env
+
+    - name: Writable directories vorbereiten
+      # PostService::sanitizeContent() legt var/cache/htmlpurifier an, die
+      # Upload-Tests verwenden public/uploads. Beide sind per .gitignore nicht
+      # im Repository; hier vorab anlegen, damit unuebliche mkdir-Warnungen
+      # waehrend der Tests entfallen.
+      run: |
+        mkdir -p var/cache/htmlpurifier public/uploads
+
+    - name: Install Composer dependencies
+      # --no-scripts: symfony/flex wuerde cache:clear/assets:install ausfuehren
+      # und ohne committete .env fatal scheitern.
+      run: composer install --no-progress --prefer-dist --no-interaction --no-scripts
+
+    - name: Generate JWT keypair (test)
+      # config/jwt/ ist per .gitignore nicht im Repository und existiert daher
+      # im CI-Checkout nicht -> Verzeichnis anlegen. Die Passphrase bewusst
+      # nicht ueberschreiben: .env.test (committet) definiert JWT_PASSPHRASE
+      # konsistent fuer Keygenerierung und die PHPUnit-Laeufe.
+      run: |
+        set -o pipefail
+        mkdir -p config/jwt
+        if php bin/console lexik:jwt:generate-keypair --skip-if-exists --env=test 2>&1 | tee /tmp/step-jwt.log; then
+          echo "JWT keypair via lexik:jwt:generate-keypair erzeugt." | tee -a /tmp/step-jwt.log
+        else
+          echo "lexik:jwt:generate-keypair fehlgeschlagen - openssl-Fallback wird ausgefuehrt." | tee -a /tmp/step-jwt.log
+          rm -f config/jwt/private.pem config/jwt/public.pem
+          openssl genrsa -aes256 -passout 'pass:SuperSecretChangeMe!' -out config/jwt/private.pem 4096
+          openssl rsa -in config/jwt/private.pem -passin 'pass:SuperSecretChangeMe!' -pubout -out config/jwt/public.pem
+          echo "JWT keypair via openssl erzeugt." | tee -a /tmp/step-jwt.log
+        fi
+
+    - name: Create test database
+      run: |
+        set -o pipefail
+        php bin/console doctrine:database:create --if-not-exists --env=test 2>&1 | tee /tmp/step-db.log
+
+    - name: Create database schema
+      run: |
+        set -o pipefail
+        php bin/console doctrine:schema:create --env=test 2>&1 | tee /tmp/step-schema.log
+
+    - name: Run PHPUnit tests
+      run: |
+        set -o pipefail
+        vendor/bin/phpunit --testdox 2>&1 | tee /tmp/step-phpunit.log
+
+    - name: PHPUnit-Ergebnis als Annotations (1/2)
+      # Macht das Ergebnis der Suite auch ohne Log-Download-Rechte lesbar
+      # (via check-runs Annotations API; max. 10 Annotations pro Step,
+      # daher Aufteilung auf zwei Steps).
+      if: failure()
+      run: |
+        L=/tmp/step-phpunit.log
+        if [ -f "$L" ]; then
+          grep -E '^(Tests:|Time:|OK \(|OK, but|FAILURES!|ERRORS!)' "$L" | head -4 | while IFS= read -r line; do
+            printf '::error::[phpunit-footer] %s\n' "$line"
+          done
+          grep -E '✘' "$L" | head -10 | while IFS= read -r line; do
+            printf '::error::[phpunit-failed] %s\n' "$line"
+          done
+        fi
+
+    - name: PHPUnit-Ergebnis als Annotations (2/2)
+      if: failure()
+      run: |
+        L=/tmp/step-phpunit.log
+        if [ -f "$L" ]; then
+          grep -E '✘' "$L" | tail -n +11 | head -5 | while IFS= read -r line; do
+            printf '::error::[phpunit-failed2] %s\n' "$line"
+          done
+          grep -m1 -A4 -E 'mkdir\(\):|Exception:|Error:' "$L" | head -5 | while IFS= read -r line; do
+            printf '::error::[phpunit-error] %s\n' "$line"
+          done
+        fi
+        for f in /tmp/step-jwt.log /tmp/step-db.log /tmp/step-schema.log; do
+          if [ -f "$f" ]; then
+            tail -n 1 "$f" | while IFS= read -r line; do
+              printf '::error::[%s] %s\n' "$(basename "$f")" "$line"
+            done
+          fi
+        done
+
+
+    - name: PHPUnit-Ergebnis als Annotations (3/2)
+      # testdox-Fehlerbloecke inkl. Assertions-Meldung (max. 10 Annotations/Step)
+      if: failure()
+      run: |
+        L=/tmp/step-phpunit.log
+        if [ -f "$L" ]; then
+          grep -A4 '✘' "$L" | grep -v '^--$' | head -10 | while IFS= read -r line; do
+            printf '::error::[phpunit-faildetail] %s\n' "$line"
+          done
+        fi
+
   test-and-build:
     name: Test and Build
     runs-on: ubuntu-latest
@@ -41,7 +190,7 @@ jobs:
       run: npm test || echo "Tests failed or not configured"
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: frontend-build
         path: public/frontend/dist/
@@ -49,7 +198,7 @@ jobs:
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: test-and-build
+    needs: [test-and-build, php-tests]
 
     steps:
     - name: Checkout code
