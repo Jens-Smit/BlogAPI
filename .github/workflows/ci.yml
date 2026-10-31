@@ -10,22 +10,6 @@ jobs:
   php-tests:
     name: Backend Tests (PHPUnit)
     runs-on: ubuntu-latest
-    env:
-      # APP_ENV als echte Umgebungsvariable ist zentral: symfony/runtime ruft
-      # beim Boot Dotenv::bootEnv auf und laedt damit die committete .env.test
-      # (APP_SECRET, JWT_PASSPHRASE, API_URL, ...). Das Console-Flag --env=test
-      # allein laedt .env.test NICHT. Echte Umgebungsvariablen haben ausserdem
-      # Vorrang vor .env-Dateien.
-      APP_ENV: "test"
-      APP_DEBUG: "1"
-      # Muss mit phpunit.xml.dist uebereinstimmen; Doctrine haengt im
-      # test-Environment den Suffix "_test" an (dbname_suffix).
-      DATABASE_URL: "mysql://root:@127.0.0.1:3306/test_blog"
-      # Kein SMTP im CI, deterministische Werte
-      MAILER_DSN: "null://null"
-      CONTACT_FROM_EMAIL: "noreply@example.de"
-      CONTACT_TO_EMAIL: "info@example.de"
-      LOCK_DSN: "flock"
 
     services:
       # config/packages/doctrine.yaml pinnt server_version: '10.4.32'
@@ -55,9 +39,28 @@ jobs:
         extensions: pdo_mysql, mbstring, xml, curl, zip, intl, gd, fileinfo
         coverage: none
 
+    - name: Prepare .env for CI
+      # symfony/runtime ruft bei JEDEM bin/console-Aufruf Dotenv::bootEnv('.env')
+      # auf. Dotenv wirft eine PathException, wenn weder .env noch .env.dist
+      # existieren (beide sind nicht im Repository, .env ist per .gitignore
+      # ignoriert). Deshalb wird eine funktionale .env aus der committeten
+      # .env.test erzeugt; angehaengte Zeilen ueberschreiben Werte aus der Kopie
+      # (Dotenv: letzter Vorkommen gewinnt, .env.test laedt danach ohne
+      # Ueberschreiben bereits definierter Variablen).
+      run: |
+        cp .env.test .env
+        # Konsistente Test-Datenbank; Doctrine haengt im test-Env den Suffix
+        # "_test" an (dbname_suffix) -> effektive DB: test_blog_test
+        printf 'DATABASE_URL="mysql://root:@127.0.0.1:3306/test_blog"\n' >> .env
+        # Kontakt- und Lock-Variablen fehlen in .env.test, werden aber von
+        # config/services.yaml bzw. config/packages/lock.yaml referenziert
+        printf 'CONTACT_FROM_EMAIL="noreply@example.de"\n' >> .env
+        printf 'CONTACT_TO_EMAIL="info@example.de"\n' >> .env
+        printf 'LOCK_DSN="flock"\n' >> .env
+
     - name: Install Composer dependencies
       # --no-scripts: symfony/flex wuerde cache:clear/assets:install ausfuehren
-      # und ohne committete .env fatal scheitern (APP_SECRET fehlt).
+      # und ohne committete .env fatal scheitern.
       run: composer install --no-progress --prefer-dist --no-interaction --no-scripts
 
     - name: Generate JWT keypair (test)
