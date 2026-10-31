@@ -27,6 +27,11 @@ class McpTokenControllerTest extends WebTestCase
         $this->client = static::createClient();
         $this->em = $this->client->getContainer()->get('doctrine')->getManager();
 
+        // Aufräumen in FK-sicherer Reihenfolge: Posts referenzieren User,
+        // Kategorien können sich selbst referenzieren (parent_id).
+        $this->em->createQuery('DELETE FROM App\Entity\Post p')->execute();
+        $this->em->getConnection()->executeStatement('UPDATE category SET parent_id = NULL');
+        $this->em->createQuery('DELETE FROM App\Entity\Category c')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\McpToken t')->execute();
         $this->em->createQuery('DELETE FROM App\Entity\User u')->execute();
     }
