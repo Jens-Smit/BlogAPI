@@ -44,14 +44,13 @@ jobs:
       # auf. Dotenv wirft eine PathException, wenn weder .env noch .env.dist
       # existieren (beide sind nicht im Repository, .env ist per .gitignore
       # ignoriert). Deshalb wird eine funktionale .env aus der committeten
-      # .env.test erzeugt; angehaengte Zeilen ueberschreiben Werte aus der Kopie
-      # (Dotenv: letzter Vorkommen gewinnt, .env.test laedt danach ohne
-      # Ueberschreiben bereits definierter Variablen).
+      # .env.test erzeugt. WICHTIG: DATABASE_URL wird per sed ERSETZT statt
+      # angehaengt (innerhalb einer .env-Datei gewinnt bei Dotenv die ERSTE
+      # Zuweisung), damit Console-Steps und PHPUnit (phpunit.xml.dist) dieselbe
+      # Datenbank verwenden: test_blog + Suffix "_test" = test_blog_test.
       run: |
         cp .env.test .env
-        # Konsistente Test-Datenbank; Doctrine haengt im test-Env den Suffix
-        # "_test" an (dbname_suffix) -> effektive DB: test_blog_test
-        printf 'DATABASE_URL="mysql://root:@127.0.0.1:3306/test_blog"\n' >> .env
+        sed -i 's|^DATABASE_URL=.*|DATABASE_URL="mysql://root:@127.0.0.1:3306/test_blog"|' .env
         # Kontakt- und Lock-Variablen fehlen in .env.test, werden aber von
         # config/services.yaml bzw. config/packages/lock.yaml referenziert
         printf 'CONTACT_FROM_EMAIL="noreply@example.de"\n' >> .env
