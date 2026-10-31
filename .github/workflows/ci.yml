@@ -58,6 +58,14 @@ jobs:
         printf 'CONTACT_TO_EMAIL="info@example.de"\n' >> .env
         printf 'LOCK_DSN="flock"\n' >> .env
 
+    - name: Writable directories vorbereiten
+      # PostService::sanitizeContent() legt var/cache/htmlpurifier an, die
+      # Upload-Tests verwenden public/uploads. Beide sind per .gitignore nicht
+      # im Repository; hier vorab anlegen, damit unuebliche mkdir-Warnungen
+      # waehrend der Tests entfallen.
+      run: |
+        mkdir -p var/cache/htmlpurifier public/uploads
+
     - name: Install Composer dependencies
       # --no-scripts: symfony/flex wuerde cache:clear/assets:install ausfuehren
       # und ohne committete .env fatal scheitern.
@@ -96,15 +104,35 @@ jobs:
         set -o pipefail
         vendor/bin/phpunit --testdox 2>&1 | tee /tmp/step-phpunit.log
 
-    - name: Fehlerausgaben als Annotations exportieren
-      # Macht die letzten Zeilen jedes Step-Logs auch ohne Log-Download-Rechte
-      # lesbar (via check-runs Annotations API).
+    - name: PHPUnit-Ergebnis als Annotations (1/2)
+      # Macht das Ergebnis der Suite auch ohne Log-Download-Rechte lesbar
+      # (via check-runs Annotations API; max. 10 Annotations pro Step,
+      # daher Aufteilung auf zwei Steps).
       if: failure()
       run: |
-        for f in /tmp/step-jwt.log /tmp/step-db.log /tmp/step-schema.log /tmp/step-phpunit.log; do
+        L=/tmp/step-phpunit.log
+        if [ -f "$L" ]; then
+          grep -E '^(Tests:|Time:|OK \(|OK, but|FAILURES!|ERRORS!)' "$L" | head -4 | while IFS= read -r line; do
+            printf '::error::[phpunit-footer] %s\n' "$line"
+          done
+          grep -E '✘' "$L" | head -5 | while IFS= read -r line; do
+            printf '::error::[phpunit-failed] %s\n' "$line"
+          done
+        fi
+
+    - name: PHPUnit-Ergebnis als Annotations (2/2)
+      if: failure()
+      run: |
+        L=/tmp/step-phpunit.log
+        if [ -f "$L" ]; then
+          grep -m1 -A5 -E 'mkdir\(\):|Exception:|Error:' "$L" | head -6 | while IFS= read -r line; do
+            printf '::error::[phpunit-error] %s\n' "$line"
+          done
+        fi
+        for f in /tmp/step-jwt.log /tmp/step-db.log /tmp/step-schema.log; do
           if [ -f "$f" ]; then
-            grep -v '^[[:space:]]*$' "$f" | tail -n 10 | while IFS= read -r line; do
-              printf '::error::[%s] %s\n' "$(basename "$f")" "$(echo "$line" | tr -d '\r')"
+            tail -n 1 "$f" | while IFS= read -r line; do
+              printf '::error::[%s] %s\n' "$(basename "$f")" "$line"
             done
           fi
         done
