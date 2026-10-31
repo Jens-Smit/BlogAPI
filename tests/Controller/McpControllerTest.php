@@ -20,7 +20,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class McpControllerTest extends WebTestCase
 {
-    private KernelBrowser $client;
+    private ?KernelBrowser $client = null;
     private $em;
     private string $uploadDirectory;
     private array $uploadedFiles = [];

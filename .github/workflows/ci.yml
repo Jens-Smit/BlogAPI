@@ -129,8 +129,8 @@ jobs:
       run: |
         L=/tmp/step-phpunit.log
         if [ -f "$L" ]; then
-          grep -m1 -A5 -E 'mkdir\(\):|Exception:|Error:' "$L" | head -6 | while IFS= read -r line; do
-            printf '::error::[phpunit-error] %s\n' "$line"
+          grep -A3 '✘' "$L" | head -10 | while IFS= read -r line; do
+            printf '::error::[phpunit-faildetail] %s\n' "$line"
           done
         fi
         for f in /tmp/step-jwt.log /tmp/step-db.log /tmp/step-schema.log; do
