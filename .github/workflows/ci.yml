@@ -44,13 +44,18 @@ jobs:
       # auf. Dotenv wirft eine PathException, wenn weder .env noch .env.dist
       # existieren (beide sind nicht im Repository, .env ist per .gitignore
       # ignoriert). Deshalb wird eine funktionale .env aus der committeten
-      # .env.test erzeugt. WICHTIG: DATABASE_URL wird per sed ERSETZT statt
-      # angehaengt (innerhalb einer .env-Datei gewinnt bei Dotenv die ERSTE
-      # Zuweisung), damit Console-Steps und PHPUnit (phpunit.xml.dist) dieselbe
-      # Datenbank verwenden: test_blog + Suffix "_test" = test_blog_test.
+      # .env.test erzeugt.
+      #
+      # DATABASE_URL wird in BEIDEN Dateien ersetzt (auch in der .env.test- Kopie):
+      # Dotenv::populate() ueberschreibt bei Datei-uebergreifendem Laden
+      # Dotenv-eigene Variablen (die spaeter geladene .env.test gewinnt), und
+      # innerhalb einer Datei gewinnt die erste Zuweisung. PHPUnit setzt
+      # DATABASE_URL=test_blog (phpunit.xml.dist) als echte Variable, die von
+      # Dotenv respektiert wird. Mit der sed-Ersetzung verwenden damit alle
+      # Steps dieselbe DB: test_blog + Suffix "_test" = test_blog_test.
       run: |
         cp .env.test .env
-        sed -i 's|^DATABASE_URL=.*|DATABASE_URL="mysql://root:@127.0.0.1:3306/test_blog"|' .env
+        sed -i 's|^DATABASE_URL=.*|DATABASE_URL="mysql://root:@127.0.0.1:3306/test_blog"|' .env .env.test
         # Kontakt- und Lock-Variablen fehlen in .env.test, werden aber von
         # config/services.yaml bzw. config/packages/lock.yaml referenziert
         printf 'CONTACT_FROM_EMAIL="noreply@example.de"\n' >> .env
