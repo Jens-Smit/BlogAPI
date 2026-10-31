@@ -10,6 +10,7 @@ import CreatePost from './pages/CreatePost';
 import EditPost from './pages/EditPost';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
+import McpTokens from './pages/McpTokens';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Contact from './pages/Contact';
@@ -34,6 +35,7 @@ function App() {
                 <Route path="/edit-post/:id" element={<EditPost />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/mcp-tokens" element={<McpTokens />} />
               </Route>
             </Routes>
           </AnimatePresence>

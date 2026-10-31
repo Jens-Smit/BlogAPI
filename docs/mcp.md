@@ -79,6 +79,103 @@ MCP-Token erstellt.
 php bin/console app:mcp:revoke-token mcp_3f9a1c8e5b2d...
 ```
 
+### Token über das Frontend verwalten
+
+Die Verwaltung ist zusätzlich über das Frontend möglich (Seite "MCP-Token",
+nur für eingeloggte Benutzer). Grundlage sind drei REST-Endpunkte, die über
+die normale `api`-Firewall (JWT-Cookie des Frontends) abgesichert sind und
+je Benutzer nur die eigenen Tokens zugänglich machen:
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|--------------|
+| `POST` | `/api/mcp/tokens` | Erstellt einen Token; der Klartext wird genau einmal in der Antwort zurückgegeben (201) |
+| `GET` | `/api/mcp/tokens` | Listet die eigenen aktiven Tokens ohne Klartext (Name, Erstelldatum, letzte Nutzung) |
+| `DELETE` | `/api/mcp/tokens/{id}` | Widerruft einen eigenen Token; fremde IDs liefern 404 (keine Enumeration) |
+
+Hinweis: `/api/mcp/tokens` wird von der MCP-Firewall (`^/api/mcp# MCP-Endpunkt der BlogAPI
+
+Die BlogAPI stellt einen **MCP-Server** (Model Context Protocol) bereit, über den
+KI-Clients wie Vibe/Mistral, Claude oder Cursor authentifiziert Blogbeiträge
+inklusive Beitragsbildern erstellen und verwalten können.
+
+- **Transport:** Streamable HTTP (MCP-Spezifikation 2025-06-18; abwärtskompatibel zu 2025-03-26 und 2024-11-05)
+- **Endpunkt:** `POST /api/mcp`
+- **Authentifizierung:** `Authorization: Bearer mcp_<token>` (dedizierte, langlebige MCP-Tokens)
+- **Zustandslosigkeit:** Keine Server-Sessions; jede Anfrage wird eigenständig authentifiziert
+
+---
+
+## 1. Architektur und Sicherheitsmodell
+
+```
+KI-Client (z.B. Vibe/Mistral)
+        |
+        | POST /api/mcp  (JSON-RPC 2.0)
+        | Authorization: Bearer mcp_<token>
+        v
++--------------------------------------------------+
+| Symfony Firewall (access_control)                 |
+|  - McpTokenAuthenticator: prüft Bearer-Token     |
+|    (SHA-256-Hash-Lookup in mcp_token)            |
++--------------------------------------------------+
+        |
+        v
++--------------------------------------------------+
+| McpController -> McpServer (JSON-RPC)            |
+|  - initialize / ping / tools/list / tools/call   |
++--------------------------------------------------+
+        |
+        v
++--------------------------------------------------+
+| McpToolProvider (8 Tools)                         |
+|  -> PostService / CategoryService (Businesslogik) |
++--------------------------------------------------+
+```
+
+Sicherheitseigenschaften:
+
+1. **Kein Klartext-Token in der Datenbank.** Gespeichert wird ausschließlich ein SHA-256-Hash (`mcp_token.token_hash`). Der Klartext-Token wird nur einmalig bei der Erstellung ausgegeben.
+2. **Widerrufbarkeit.** `php bin/console app:mcp:revoke-token` entzieht einen Token sofort; jede laufende Anfrage danach wird mit HTTP 401 abgewiesen.
+3. **Benutzerbindung.** Jeder Token gehört zu genau einem Benutzer. Autor-Prüfungen (Bearbeiten/Löschen nur durch den Autor) gelten unverändert.
+4. **Vollständige Absicherung.** Auch der `initialize`-Handshake erfordert Authentifizierung (`access_control: ^/api/mcp$ -> IS_AUTHENTICATED_FULLY`).
+5. **Auditierbarkeit.** `mcp_token.last_used_at` protokolliert die letzte Nutzung.
+6. **Gleiche Validierung wie REST.** Bilder durchlaufen dieselben Prüfungen wie reguläre Uploads (MIME-Whitelist JPEG/PNG/GIF/WebP, 5MB-Limit, finfo-Inhaltsprüfung, sicherer Dateiname). Beitragsinhalte werden durch HTMLPurifier sanitisiert.
+7. **WWW-Authenticate-Header.** Ungültige Requests erhalten HTTP 401 mit `WWW-Authenticate: Bearer`, sodass Clients (z.B. Vibe) die Authentifizierungsmethode automatisch erkennen.
+
+Abgrenzung zum bestehenden JWT-Cookie-Authenticator: Browser/Frontend authentifizieren sich weiterhin über das HttpOnly-`BEARER`-Cookie. Der `Authorization`-Header ist bewusst dem MCP-Pfad zugeordnet, da MCP-Clients keine Cookies verwalten und statische, langlebige Bearer-Credentials benötigen (JWT-TTL: 3600 Sekunden).
+
+---
+
+## 2. MCP-Token verwalten
+
+### Token erstellen
+
+```bash
+php bin/console app:mcp:create-token info@jenssmit.de --name=Vibe
+```
+
+Ausgabe (Token nur einmal sichtbar):
+
+```
+MCP-Token erstellt.
+
+  Token (nur jetzt sichtbar, bitte sicher speichern):
+  mcp_3f9a1c8e5b2d7f4a6c9e1b8d3f5a7c2e4b6d9f1a3c5e7b9d
+
+  Verwendung im Authorization-Header:
+  Authorization: Bearer mcp_3f9a1c8e5b2d7f4a6c9e1b8d3f5a7c2e4b6d9f1a3c5e7b9d
+```
+
+### Token widerrufen
+
+```bash
+# per Klartext-Token oder interner ID
+php bin/console app:mcp:revoke-token mcp_3f9a1c8e5b2d...
+```
+
+) nicht
+erfasst und läuft daher bewusst über die normale `api`-Firewall.
+
 ### Hinweise zum Datenbankschema
 
 Die Tabelle `mcp_token` wird über die Doctrine-Migration `Version20261031120000` erstellt:
@@ -226,7 +323,7 @@ Im Anschluss empfiehlt es sich, unter **My Connectors > Functions** die Schreib-
 
 ## 6. Tests
 
-Funktionale Tests: `tests/Controller/McpControllerTest.php`
+Funktionale Tests: `tests/Controller/McpControllerTest.php` (MCP-Endpunkt) und `tests/Controller/McpTokenControllerTest.php` (Frontend-Verwaltung)
 
 Abgedeckte Szenarien:
 
