@@ -11,19 +11,28 @@ jobs:
     name: Backend Tests (PHPUnit)
     runs-on: ubuntu-latest
     env:
-      # Muss mit phpunit.xml.dist übereinstimmen; Doctrine hängt im
+      # APP_ENV als echte Umgebungsvariable ist zentral: symfony/runtime ruft
+      # beim Boot Dotenv::bootEnv auf und laedt damit die committete .env.test
+      # (APP_SECRET, JWT_PASSPHRASE, API_URL, ...). Das Console-Flag --env=test
+      # allein laedt .env.test NICHT. Echte Umgebungsvariablen haben ausserdem
+      # Vorrang vor .env-Dateien.
+      APP_ENV: "test"
+      APP_DEBUG: "1"
+      # Muss mit phpunit.xml.dist uebereinstimmen; Doctrine haengt im
       # test-Environment den Suffix "_test" an (dbname_suffix).
       DATABASE_URL: "mysql://root:@127.0.0.1:3306/test_blog"
-      # Echte Umgebungsvariablen haben Vorrang vor .env-Dateien:
-      # kein SMTP im CI, deterministische Werte
+      # Kein SMTP im CI, deterministische Werte
       MAILER_DSN: "null://null"
       CONTACT_FROM_EMAIL: "noreply@example.de"
       CONTACT_TO_EMAIL: "info@example.de"
       LOCK_DSN: "flock"
 
     services:
-      mysql:
-        image: mysql:8.0
+      # config/packages/doctrine.yaml pinnt server_version: '10.4.32'
+      # (MariaDB). Damit die Doctrine-Platform zur Server-Version passt,
+      # verwendet CI dieselbe MariaDB-Version.
+      mariadb:
+        image: mariadb:10.4
         env:
           MYSQL_ALLOW_EMPTY_PASSWORD: yes
           MYSQL_DATABASE: test_blog
@@ -47,36 +56,55 @@ jobs:
         coverage: none
 
     - name: Install Composer dependencies
-      # --no-scripts: symfony/flex würde cache:clear/assets:install ausführen
+      # --no-scripts: symfony/flex wuerde cache:clear/assets:install ausfuehren
       # und ohne committete .env fatal scheitern (APP_SECRET fehlt).
       run: composer install --no-progress --prefer-dist --no-interaction --no-scripts
 
     - name: Generate JWT keypair (test)
       # config/jwt/ ist per .gitignore nicht im Repository und existiert daher
-      # im CI-Checkout nicht. Die Passphrase bewusst NICHT ueberschreiben:
-      # .env.test (committet) definiert JWT_PASSPHRASE und gilt konsistent
-      # fuer Keygenierung UND die PHPUnit-Laeufe. Wuerden die Schritte
-      # unterschiedliche Passphrasen verwenden, schlagen Login-Tests fehl.
+      # im CI-Checkout nicht -> Verzeichnis anlegen. Die Passphrase bewusst
+      # nicht ueberschreiben: .env.test (committet) definiert JWT_PASSPHRASE
+      # konsistent fuer Keygenerierung und die PHPUnit-Laeufe.
       run: |
+        set -o pipefail
         mkdir -p config/jwt
-        if php bin/console lexik:jwt:generate-keypair --skip-if-exists --env=test; then
-          echo "JWT keypair via lexik:jwt:generate-keypair erzeugt."
+        if php bin/console lexik:jwt:generate-keypair --skip-if-exists --env=test 2>&1 | tee /tmp/step-jwt.log; then
+          echo "JWT keypair via lexik:jwt:generate-keypair erzeugt." | tee -a /tmp/step-jwt.log
         else
-          echo "lexik:jwt:generate-keypair fehlgeschlagen - openssl-Fallback wird ausgefuehrt."
+          echo "lexik:jwt:generate-keypair fehlgeschlagen - openssl-Fallback wird ausgefuehrt." | tee -a /tmp/step-jwt.log
           rm -f config/jwt/private.pem config/jwt/public.pem
           openssl genrsa -aes256 -passout 'pass:SuperSecretChangeMe!' -out config/jwt/private.pem 4096
           openssl rsa -in config/jwt/private.pem -passin 'pass:SuperSecretChangeMe!' -pubout -out config/jwt/public.pem
-          echo "JWT keypair via openssl erzeugt."
+          echo "JWT keypair via openssl erzeugt." | tee -a /tmp/step-jwt.log
         fi
 
     - name: Create test database
-      run: php bin/console doctrine:database:create --if-not-exists --env=test
+      run: |
+        set -o pipefail
+        php bin/console doctrine:database:create --if-not-exists --env=test 2>&1 | tee /tmp/step-db.log
 
     - name: Create database schema
-      run: php bin/console doctrine:schema:create --env=test
+      run: |
+        set -o pipefail
+        php bin/console doctrine:schema:create --env=test 2>&1 | tee /tmp/step-schema.log
 
     - name: Run PHPUnit tests
-      run: vendor/bin/phpunit --testdox
+      run: |
+        set -o pipefail
+        vendor/bin/phpunit --testdox 2>&1 | tee /tmp/step-phpunit.log
+
+    - name: Fehlerausgaben als Annotations exportieren
+      # Macht die letzten Zeilen jedes Step-Logs auch ohne Log-Download-Rechte
+      # lesbar (via check-runs Annotations API).
+      if: failure()
+      run: |
+        for f in /tmp/step-jwt.log /tmp/step-db.log /tmp/step-schema.log /tmp/step-phpunit.log; do
+          if [ -f "$f" ]; then
+            grep -v '^[[:space:]]*$' "$f" | tail -n 10 | while IFS= read -r line; do
+              printf '::error::[%s] %s\n' "$(basename "$f")" "$(echo "$line" | tr -d '\r')"
+            done
+          fi
+        done
 
   test-and-build:
     name: Test and Build
