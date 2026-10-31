@@ -52,9 +52,22 @@ jobs:
       run: composer install --no-progress --prefer-dist --no-interaction --no-scripts
 
     - name: Generate JWT keypair (test)
-      env:
-        JWT_PASSPHRASE: ci-test-passphrase
-      run: php bin/console lexik:jwt:generate-keypair --skip-if-exists --env=test
+      # config/jwt/ ist per .gitignore nicht im Repository und existiert daher
+      # im CI-Checkout nicht. Die Passphrase bewusst NICHT ueberschreiben:
+      # .env.test (committet) definiert JWT_PASSPHRASE und gilt konsistent
+      # fuer Keygenierung UND die PHPUnit-Laeufe. Wuerden die Schritte
+      # unterschiedliche Passphrasen verwenden, schlagen Login-Tests fehl.
+      run: |
+        mkdir -p config/jwt
+        if php bin/console lexik:jwt:generate-keypair --skip-if-exists --env=test; then
+          echo "JWT keypair via lexik:jwt:generate-keypair erzeugt."
+        else
+          echo "lexik:jwt:generate-keypair fehlgeschlagen - openssl-Fallback wird ausgefuehrt."
+          rm -f config/jwt/private.pem config/jwt/public.pem
+          openssl genrsa -aes256 -passout 'pass:SuperSecretChangeMe!' -out config/jwt/private.pem 4096
+          openssl rsa -in config/jwt/private.pem -passin 'pass:SuperSecretChangeMe!' -pubout -out config/jwt/public.pem
+          echo "JWT keypair via openssl erzeugt."
+        fi
 
     - name: Create test database
       run: php bin/console doctrine:database:create --if-not-exists --env=test
