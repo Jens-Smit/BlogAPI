@@ -16,6 +16,12 @@ use Symfony\Component\HttpFoundation\Response;
  * Deckt ab: Authentifizierungszwang, einmalige Rückgabe des Klartext-Tokens,
  * Validierung, Besitzprüfung (kein Zugriff auf fremde Tokens) sowie die
  * Wirkung eines Widerrufs auf den MCP-Endpunkt.
+ *
+ * Hinweis zur Teststruktur: Die api-Firewall ist stateless. Der über
+ * loginUser() gesetzte Token liegt im untracked_token_storage des aktuellen
+ * Containers und überlebt den Kernel-Reboot zwischen zwei Requests nicht.
+ * Jeder Test stellt daher maximal EINEN authentifizierten Request -
+ * identisch zur Konvention in PostControllerTest und McpControllerTest.
  */
 class McpTokenControllerTest extends WebTestCase
 {
@@ -106,18 +112,34 @@ class McpTokenControllerTest extends WebTestCase
         $this->assertSame($user->getId(), $stored->getUser()->getId());
     }
 
-    public function testCreateTokenValidatesName(): void
+    public function testCreateTokenRejectsTooShortName(): void
     {
         $user = $this->createAndPersistUser();
         $this->client->loginUser($user);
 
         $this->jsonRequest('POST', '/api/mcp/tokens', ['name' => 'a']);
+
         $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $this->client->getResponse()->getStatusCode());
+        $this->assertStringContainsString('name', $this->client->getResponse()->getContent());
+    }
+
+    public function testCreateTokenRejectsMissingName(): void
+    {
+        $user = $this->createAndPersistUser();
+        $this->client->loginUser($user);
 
         $this->jsonRequest('POST', '/api/mcp/tokens', []);
+
         $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testCreateTokenRejectsInvalidJson(): void
+    {
+        $user = $this->createAndPersistUser();
+        $this->client->loginUser($user);
 
         $this->client->request('POST', '/api/mcp/tokens', [], [], ['CONTENT_TYPE' => 'application/json'], 'kein json');
+
         $this->assertSame(Response::HTTP_BAD_REQUEST, $this->client->getResponse()->getStatusCode());
     }
 
@@ -181,25 +203,22 @@ class McpTokenControllerTest extends WebTestCase
         $this->em->persist($mcpToken);
         $this->em->flush();
 
-        // Vor dem Widerruf funktioniert der Token am MCP-Endpunkt.
-        $this->client->request('POST', '/api/mcp', [], [], [
-            'CONTENT_TYPE' => 'application/json',
-            'HTTP_AUTHORIZATION' => 'Bearer ' . $plainToken,
-        ], json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'ping']));
-        $this->assertResponseIsSuccessful();
-
-        // Widerruf über die Frontend-API.
+        // Widerruf über die Frontend-API. Dies ist der einzige authentifizierte
+        // Request des Tests (stateless Firewall, siehe Klassen-DocBlock); dass
+        // der Token vorher am MCP-Endpunkt gültig war, deckt der
+        // McpControllerTest ab.
         $this->client->loginUser($user);
         $this->client->request('DELETE', '/api/mcp/tokens/' . $mcpToken->getId());
         $this->assertResponseIsSuccessful();
 
-        // Nach dem Widerruf weist der MCP-Endpunkt den Token ab.
-        $client2 = static::createClient();
-        $client2->request('POST', '/api/mcp', [], [], [
+        // Nach dem Widerruf weist der MCP-Endpunkt den Token ab. Die
+        // Bearer-Authentifizierung am MCP-Endpunkt ist von loginUser()
+        // unabhängig und funktioniert auch nach dem Kernel-Reboot.
+        $this->client->request('POST', '/api/mcp', [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_AUTHORIZATION' => 'Bearer ' . $plainToken,
         ], json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'ping']));
-        $this->assertSame(Response::HTTP_UNAUTHORIZED, $client2->getResponse()->getStatusCode());
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $this->client->getResponse()->getStatusCode());
     }
 
     public function testRevokeForeignTokenReturns404(): void
